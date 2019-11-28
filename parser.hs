@@ -14,6 +14,7 @@ data Op
 data Expr
 	= Ident String
 	| Infix Op Expr Expr
+	| Call Expr [Expr]
 	| LitInt Integer
 	| LitBool Bool
 	| LitFunc [Expr] Statement
@@ -32,24 +33,30 @@ expression :: Parser Expr
 expression = Ex.buildExpressionParser table term <?> "expression"
 
 table = [
-	[Ex.Infix (reserved "*" >> return (Infix Times)) Ex.AssocLeft,
-	 Ex.Infix (reserved "/" >> return (Infix Divide)) Ex.AssocLeft],
-	[Ex.Infix (reserved "+" >> return (Infix Plus)) Ex.AssocLeft,
-	 Ex.Infix (reserved "-" >> return (Infix Minus)) Ex.AssocLeft]
+	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft],
+	[Ex.Infix (reservedOp "+" >> return (Infix Plus)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft]
 	]
         
 term =
-	parens expression
+	try call
 	<|> ident
 	<|> fmap LitInt integer
 	<|> litFunc
 	<|> (reserved "true" >> (return $ LitBool True))
 	<|> (reserved "false" >> (return $ LitBool False))
+	<|> parens expression
 	
 block :: Parser Statement
 block =
 	fmap Block $ braces (many statement)
 	
+call :: Parser Expr
+call = do
+	name <- ident
+	args <- parens $ commaSep expression
+	return $ Call name args
 	
 litFunc :: Parser Expr
 litFunc = do
