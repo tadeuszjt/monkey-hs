@@ -1,9 +1,17 @@
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import System.IO (isEOF)
 import qualified Parser as P
 
+process :: IO ()
+process = do
+	line <- getLine
+	prog <- P.parseStr line
+	putStrLn $ show prog
+	main
+
 main :: IO ()
 main = do
-	content <- getContents
-	prog <- P.parseStr content
-	putStr $ show prog
+	done <- isEOF
+	if done
+	then return ()
+	else process
