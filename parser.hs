@@ -27,34 +27,18 @@ data Statement
 
 type Program = [Statement]
 
+-- Expression Parsers
 
-expression :: Parser Expr
-expression = Ex.buildExpressionParser table term <?> "expression"
+ident :: Parser Expr
+ident =
+	fmap Ident identifier
 
-table = [
-	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft],
-	[Ex.Infix (reservedOp "+" >> return (Infix Plus)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft]
-	]
-        
-term =
-	try call
-	<|> try ident
-	<|> try litFloat 
-	<|> litFunc
-	<|> parens expression
-	
-block :: Parser Statement
-block =
-	fmap Block $ braces (many statement)
-	
-call :: Parser Expr
-call = do
-	name <- ident
-	args <- parens $ commaSep expression
-	return $ Call name args
-	
+litFloat :: Parser Expr
+litFloat =
+	fmap LitFloat $
+		try $ fmap fromInteger integer
+		<|> float
+
 litFunc :: Parser Expr
 litFunc = do
 	reserved "fn"
@@ -62,40 +46,62 @@ litFunc = do
 	blck <- block
 	return $ LitFunc args blck
 
-litFloat :: Parser Expr
-litFloat =
-	try (do i <- integer; return $ LitFloat (fromInteger i))
-	<|> fmap LitFloat float
+call :: Parser Expr
+call = do
+	name <- ident
+	args <- parens $ commaSep expression
+	return $ Call name args
 
-ident :: Parser Expr
-ident =
-	fmap Ident identifier
+table = [
+	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft],
+	[Ex.Infix (reservedOp "+" >> return (Infix Plus)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft]
+	]
+
+term =
+	try call
+	<|> try ident
+	<|> try litFloat 
+	<|> try litFunc
+	<|> parens expression
+
+expression :: Parser Expr
+expression =
+	Ex.buildExpressionParser table term <?> "expression"
+
+-- Statement Parsers
+
+ret :: Parser Statement
+ret = do
+	reserved "return"
+	fmap Return expression
 
 assign :: Parser Statement
 assign = do
 	reserved "let"
 	name <- ident
-	reserved "="
-	expr <- expression
-	return $ Let name expr
-	
-ret :: Parser Statement
-ret = do
-	reserved "return"
-	expr <- expression
-	return $ Return expr
-	
+	reservedOp "="
+	fmap (Let name) expression
+
 statement :: Parser Statement
 statement = do
-	s <- try assign <|> ret
+	s <- try assign
+	     <|> ret
 	semi
 	return s
+
+block :: Parser Statement
+block =
+	fmap Block $ braces (many statement)
 	
 program :: Parser Program
 program = do
 	s <- many statement
 	eof
 	return s
+
+-- Parse Function
 
 parseStr :: String -> IO Program
 parseStr str = do
