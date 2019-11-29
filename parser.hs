@@ -1,31 +1,9 @@
 module Parser where
 
 import Lexer
+import AST
 import Text.ParserCombinators.Parsec
 import qualified Text.ParserCombinators.Parsec.Expr as Ex
-
-data Op
-	= Plus
-	| Minus
-	| Times
-	| Divide
-	deriving (Show, Eq)
-
-data Expr
-	= Ident String
-	| Infix Op Expr Expr
-	| Call Expr [Expr]
-	| LitFunc [Expr] Statement
-	| LitFloat Double
-	deriving Show
-
-data Statement
-	= Let Expr Expr
-	| Return Expr
-	| Block [Statement]
-	deriving (Show)
-
-type Program = [Statement]
 
 -- Expression Parsers
 
@@ -79,10 +57,9 @@ ret = do
 
 assign :: Parser Statement
 assign = do
-	reserved "let"
 	name <- ident
-	reservedOp "="
-	fmap (Let name) expression
+	reservedOp ":="
+	fmap (Assign name) expression
 
 statement :: Parser Statement
 statement = do

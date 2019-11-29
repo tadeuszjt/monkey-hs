@@ -1,12 +1,11 @@
 module Lexer where
 
-import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language (emptyDef)
 import qualified Text.ParserCombinators.Parsec.Token as Tok
 
 lexer :: Tok.TokenParser()
 lexer = Tok.makeTokenParser emptyDef {
-	Tok.reservedOpNames = ["+", "-", "*", "/", "="],
+	Tok.reservedOpNames = ["+", "-", "*", "/", ":="],
 	Tok.reservedNames = ["let", "return", "fn", "test"]
 }
 
