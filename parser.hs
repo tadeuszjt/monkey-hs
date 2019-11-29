@@ -15,9 +15,8 @@ data Expr
 	= Ident String
 	| Infix Op Expr Expr
 	| Call Expr [Expr]
-	| LitInt Integer
-	| LitBool Bool
 	| LitFunc [Expr] Statement
+	| LitFloat Double
 	deriving Show
 
 data Statement
@@ -41,11 +40,9 @@ table = [
         
 term =
 	try call
-	<|> ident
-	<|> fmap LitInt integer
+	<|> try ident
+	<|> try litFloat 
 	<|> litFunc
-	<|> (reserved "true" >> (return $ LitBool True))
-	<|> (reserved "false" >> (return $ LitBool False))
 	<|> parens expression
 	
 block :: Parser Statement
@@ -64,6 +61,11 @@ litFunc = do
 	args <- parens $ commaSep ident
 	blck <- block
 	return $ LitFunc args blck
+
+litFloat :: Parser Expr
+litFloat =
+	try (do i <- integer; return $ LitFloat (fromInteger i))
+	<|> fmap LitFloat float
 
 ident :: Parser Expr
 ident =
