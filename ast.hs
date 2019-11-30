@@ -8,11 +8,11 @@ data Op
 	deriving (Show, Eq)
 
 data Expr
-	= Ident String
-	| Infix Op Expr Expr
+	= LitFloat Double
+	| Ident String
 	| Call Expr [Expr]
 	| LitFunc [Expr] Statement
-	| LitFloat Double
+	| Infix Op Expr Expr
 	deriving Show
 
 data Statement
