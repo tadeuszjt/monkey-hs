@@ -11,7 +11,7 @@ data Expr
 	= LitFloat Double
 	| Ident String
 	| Call Expr [Expr]
-	| LitFunc [Expr] Statement
+	| LitFunc [String] Statement
 	| Infix Op Expr Expr
 	deriving Show
 

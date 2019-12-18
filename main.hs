@@ -14,10 +14,12 @@ process env = do
 		putStrLn "done"
 	else do
 		line <- getLine
-		(x:xs) <- P.parseStr line
-		print x
-		let s = runStateT (E.evStmt $ x) env
-		print s
+		prog <- P.parseStr line
+		let s = runStateT (E.evProg prog) env
+		case s of
+			Right (_, env') -> process env'
+			Left str -> print str
+
 
 main :: IO ()
 main = do

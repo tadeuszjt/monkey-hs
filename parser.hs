@@ -20,7 +20,7 @@ litFloat =
 litFunc :: Parser Expr
 litFunc = do
 	reserved "fn"
-	args <- parens $ commaSep ident
+	args <- parens $ commaSep identifier
 	blck <- block
 	return $ LitFunc args blck
 
@@ -63,10 +63,10 @@ assign = do
 
 statement :: Parser Statement
 statement = do
-	s <- try assign
-	     <|> ret
-	semi
-	return s
+	try block <|> do
+		s <- try assign <|> ret
+		semi
+		return s
 
 block :: Parser Statement
 block =
