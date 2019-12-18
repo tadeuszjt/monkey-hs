@@ -23,4 +23,7 @@ process env = do
 
 main :: IO ()
 main = do
-	process []
+	content <- getContents
+	prog <- P.parseStr content
+	let s = runStateT (E.evProg prog) E.emptyEnv
+	print s

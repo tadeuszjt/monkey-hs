@@ -11,11 +11,17 @@ ident :: Parser Expr
 ident =
 	fmap Ident identifier
 
-litFloat :: Parser Expr
-litFloat =
-	fmap LitFloat $
+litFlt :: Parser Expr
+litFlt =
+	fmap LitFlt $
 		try $ fmap fromInteger integer
 		<|> float
+
+litBool :: Parser Expr
+litBool =
+	fmap LitBool $
+		try (do {reserved "true"; return True})
+		<|> (do {reserved "false"; return False})
 
 litFunc :: Parser Expr
 litFunc = do
@@ -27,51 +33,97 @@ litFunc = do
 call :: Parser Expr
 call = do
 	name <- ident
-	args <- parens $ commaSep expression
+	args <- parens $ commaSep expr
 	return $ Call name args
+
+ifExpr :: Parser Expr
+ifExpr = do
+	reserved "if"
+	cnd <- expr
+	ex1 <- braces expr
+	reserved "else"
+	ex2 <- braces expr
+	return $ IfExpr cnd ex1 ex2
 
 table = [
 	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft],
 	[Ex.Infix (reservedOp "+" >> return (Infix Plus)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft]
+	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft],
+	[Ex.Infix (reservedOp "<" >> return (Infix LThan)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp ">" >> return (Infix GThan)) Ex.AssocLeft]
 	]
 
 term =
 	try call
 	<|> try ident
-	<|> try litFloat 
+	<|> try ifExpr
+	<|> try litFlt
+	<|> try litBool
 	<|> try litFunc
-	<|> parens expression
+	<|> parens expr
 
-expression :: Parser Expr
-expression =
+expr :: Parser Expr
+expr =
 	Ex.buildExpressionParser table term <?> "expression"
 
 -- Statement Parsers
 
-ret :: Parser Statement
+ret :: Parser Stmt
 ret = do
 	reserved "return"
-	fmap Return expression
+	fmap Return expr
 
-assign :: Parser Statement
+assign :: Parser Stmt
 assign = do
 	name <- ident
 	reservedOp ":="
-	fmap (Assign name) expression
+	fmap (Assign name) expr
 
-statement :: Parser Statement
-statement = do
-	try block <|> do
-		s <- try assign <|> ret
+set :: Parser Stmt
+set = do
+	name <- ident
+	reservedOp "="
+	fmap (Set name) expr
+
+ifStmt :: Parser Stmt
+ifStmt = do
+	reserved "if"
+	cnd <- expr
+	blk <- block
+	return $ IfStmt cnd blk
+
+while :: Parser Stmt
+while = do
+	reserved "while"
+	cnd <- expr
+	blk <- block
+	return $ While cnd blk
+	
+
+statement :: Parser Stmt
+statement =
+	try block <|>
+	try ifStmt <|>
+	try while <|> do
+		s <- try assign
+			<|> try ret
+			<|> try set
 		semi
 		return s
 
-block :: Parser Statement
+exprStmt :: Parser Stmt
+exprStmt = do
+	exp <- expr
+	semi
+	return $ ExprStmt exp
+
+block :: Parser Stmt
 block =
-	fmap Block $ braces (many statement)
-	
+	fmap Block . braces . many $
+		try statement
+		<|> exprStmt
+
 program :: Parser Program
 program = do
 	s <- many statement

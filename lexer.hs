@@ -5,11 +5,11 @@ import qualified Text.ParserCombinators.Parsec.Token as Tok
 
 lexer :: Tok.TokenParser()
 lexer = Tok.makeTokenParser emptyDef {
-	Tok.reservedOpNames = ["+", "-", "*", "/", ":="],
-	Tok.reservedNames = ["let", "return", "fn", "test"]
+	Tok.reservedOpNames = ["+", "-", "*", "/", "=", ":=", "<", ">"],
+	Tok.reservedNames = ["return", "fn", "if", "else", "true", "false", "while"]
 }
 
-identifier = Tok.identifier lexer	
+identifier = Tok.identifier lexer
 semi = Tok.semi lexer
 integer = Tok.integer lexer
 float = Tok.float lexer

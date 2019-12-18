@@ -5,20 +5,28 @@ data Op
 	| Minus
 	| Times
 	| Divide
+	| LThan
+	| GThan
 	deriving (Show, Eq)
 
 data Expr
-	= LitFloat Double
+	= LitFlt Double
+	| LitBool Bool
 	| Ident String
 	| Call Expr [Expr]
-	| LitFunc [String] Statement
+	| LitFunc [String] Stmt
 	| Infix Op Expr Expr
+	| IfExpr Expr Expr Expr
 	deriving Show
 
-data Statement
+data Stmt
 	= Assign Expr Expr
+	| Set Expr Expr
+	| IfStmt Expr Stmt
+	| While Expr Stmt
 	| Return Expr
-	| Block [Statement]
+	| Block [Stmt]
+	| ExprStmt Expr
 	deriving (Show)
 
-type Program = [Statement]
+type Program = [Stmt]
