@@ -9,16 +9,28 @@ data Object
 	= Flt Double
 	| Bl Bool
 	| Func S.Expr
-	| Call {
-		name :: String,
-		args :: [S.Expr]
-		}
+	| Call String [S.Expr]
 	deriving Show
 
 emptyEnv = Map.empty
 
 type Env = Map.Map String Object 
 type Eval a = StateT Env (Either String) a
+
+evInfix :: S.Expr -> Eval Object
+evInfix (S.Infix op e1 e2) = do
+	e1' <- evExpr e1
+	e2' <- evExpr e2
+	let tup = (e1', e2', op)
+	case tup of
+		(Flt x, Flt y, S.Plus) -> return $ Flt (x + y)
+		(Flt x, Flt y, S.Minus) -> return $ Flt (x - y)
+		(Flt x, Flt y, S.Times) -> return $ Flt (x * y)
+		(Flt x, Flt y, S.Divide) -> return $ Flt (x / y)
+		(Flt x, Flt y, S.LThan) -> return $ Bl (x < y)
+		(Flt x, Flt y, S.GThan) -> return $ Bl (x > y)
+		_ -> lift $ Left ("invalid infix: " ++ show tup)
+
 
 evExpr :: S.Expr -> Eval Object
 evExpr e = case e of
@@ -34,17 +46,8 @@ evExpr e = case e of
 			Just ob -> return ob
 			Nothing -> lift $ Left (name ++ " not found")
 
-	S.Infix op e1 e2 -> do
-		e1' <- evExpr e1
-		e2' <- evExpr e2
-		case (e1', op, e2') of
-			(Flt x, S.Plus, Flt y)   -> return $ Flt (x + y)
-			(Flt x, S.Minus, Flt y)  -> return $ Flt (x - y)
-			(Flt x, S.Times, Flt y)  -> return $ Flt (x * y)
-			(Flt x, S.Divide, Flt y) -> return $ Flt (x / y)
-			(Flt x, S.LThan, Flt y) -> return $ Bl (x < y)
-			(Flt x, S.GThan, Flt y) -> return $ Bl (x > y)
-			_ -> lift $ Left "invalid operator expression"
+	S.Infix _ _ _ ->
+		evInfix e
 	
 	S.LitFunc exprs stmt ->
 		return $ Func e
@@ -74,10 +77,10 @@ evFnBlock (S.Block xs) = case xs of
 	[] ->
 		return []
 
-	((S.Return expr):_) ->
+	[(S.ExprStmt expr)] ->
 		fmap (:[]) $ evExpr expr
 
-	((S.ExprStmt expr):_) ->
+	((S.Return expr):_) ->
 		fmap (:[]) $ evExpr expr
 
 	(x:xs) -> do
