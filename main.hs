@@ -3,8 +3,9 @@ import Control.Monad.State
 import System.IO (isEOF)
 import qualified Parser as P
 import qualified Evaluate as E
+import qualified AST as S
 
-process :: E.Environment -> IO ()
+process :: E.Env -> IO ()
 process env = do
 	done <- isEOF
 	if done
@@ -13,13 +14,11 @@ process env = do
 		putStrLn "done"
 	else do
 		line <- getLine
-		prog <- P.parseStr line
-		print prog
-		let (objParse, env') = runState (E.evalProg prog) env
-		print objParse
-		print env'
-		process env'
+		(x:xs) <- P.parseStr line
+		print x
+		let s = runStateT (E.evStmt $ x) env
+		print s
 
 main :: IO ()
 main = do
-	process E.emptyEnv
+	process []
