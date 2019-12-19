@@ -7,21 +7,22 @@ data Op
 	| Divide
 	| LThan
 	| GThan
+	| Mod
 	deriving (Show, Eq)
 
 data Expr
 	= LitFlt Double
 	| LitBool Bool
 	| Ident String
-	| Call Expr [Expr]
+	| Call String [Expr]
 	| LitFunc [String] Stmt
 	| Infix Op Expr Expr
 	| IfExpr Expr Expr Expr
 	deriving Show
 
 data Stmt
-	= Assign Expr Expr
-	| Set Expr Expr
+	= Assign String Expr
+	| Set String Expr
 	| IfStmt Expr Stmt
 	| While Expr Stmt
 	| Return Expr

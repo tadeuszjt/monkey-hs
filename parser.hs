@@ -32,7 +32,7 @@ litFunc = do
 
 call :: Parser Expr
 call = do
-	name <- ident
+	(Ident name) <- ident
 	args <- parens $ commaSep expr
 	return $ Call name args
 
@@ -47,7 +47,8 @@ ifExpr = do
 
 table = [
 	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft],
+	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp "%" >> return (Infix Mod)) Ex.AssocLeft],
 	[Ex.Infix (reservedOp "+" >> return (Infix Plus)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft],
 	[Ex.Infix (reservedOp "<" >> return (Infix LThan)) Ex.AssocLeft,
@@ -76,13 +77,13 @@ ret = do
 
 assign :: Parser Stmt
 assign = do
-	name <- ident
+	(Ident name) <- ident
 	reservedOp ":="
 	fmap (Assign name) expr
 
 set :: Parser Stmt
 set = do
-	name <- ident
+	(Ident name) <- ident
 	reservedOp "="
 	fmap (Set name) expr
 
@@ -105,6 +106,7 @@ statement :: Parser Stmt
 statement =
 	try block <|>
 	try ifStmt <|>
+	try exprStmt <|>
 	try while <|> do
 		s <- try assign
 			<|> try ret
@@ -120,9 +122,7 @@ exprStmt = do
 
 block :: Parser Stmt
 block =
-	fmap Block . braces . many $
-		try statement
-		<|> exprStmt
+	fmap Block . braces . many $ statement
 
 program :: Parser Program
 program = do
