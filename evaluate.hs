@@ -1,6 +1,5 @@
 module Evaluate where
 
-import Object
 import qualified AST as S
 import qualified Data.Map as Map
 import Control.Monad.State
