@@ -6,6 +6,7 @@ fib := fn(n) {
    b := 1;
    c := 0;
    i := 0;
+
    while (i < n - 2) {
      c = a + b;
      b = a;
@@ -15,4 +16,4 @@ fib := fn(n) {
    return a;
 };
 		
-y := fib(35);
+fib(35);
