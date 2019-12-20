@@ -98,6 +98,7 @@ evTopStmt stmt = case stmt of
 	S.Assign name expr -> envAdd name =<< evExpr expr
 	S.Set name expr    -> envSet name =<< evExpr expr
 	S.ExprStmt _       -> evExprStmt stmt
+	S.While _ _        -> evWhile stmt >> return ()
 	S.Block _          -> do
 		envPush
 		ret <- evBlock stmt
@@ -115,6 +116,7 @@ evBlock (S.Block [x]) = case x of
 	S.Assign name expr -> evExpr expr >>= envAdd name >> return Nothing
 	S.Set name expr    -> evExpr expr >>= envSet name >> return Nothing
 	S.While _ _        -> evWhile x
+	S.IfStmt _ _ _     -> evIfStmt x
 	_                  -> err $ show x ++ " not allowed in block"
 evBlock (S.Block (x:xs)) = do
 	ret <- evBlock (S.Block [x])
@@ -130,11 +132,11 @@ evExprStmt (S.ExprStmt expr) = case expr of
 	_                  -> err $ show expr ++ " not allowed as statement"
 
 
-
 evWhile :: S.Stmt -> Eval (Maybe Object)
 evWhile stmt@(S.While cnd blk) = do
 	cnd' <- evExpr cnd
 	case cnd' of
+		OBool False -> return Nothing
 		OBool True  -> do
 			envPush
 			ret <- evBlock blk
@@ -142,11 +144,21 @@ evWhile stmt@(S.While cnd blk) = do
 			case ret of
 				Just _  -> return ret
 				Nothing -> evWhile stmt
-		OBool False -> return Nothing
 		_           -> err "while cnd not bool"
 
 
-
+evIfStmt :: S.Stmt -> Eval (Maybe Object)
+evIfStmt (S.IfStmt cnd blk els) = do
+	cnd' <- evExpr cnd
+	bool <- case cnd' of
+		(OBool b) -> liftMaybe $ Just b
+		_         -> err $ "if cnd not bool"
+	if bool
+	then evBlock blk
+	else case els of
+		Nothing               -> return Nothing
+		Just (S.IfStmt c b e) -> evIfStmt (S.IfStmt c b e)
+		Just (S.Block b)      -> evBlock (S.Block b)
 
 -- expression functions
 
@@ -179,9 +191,20 @@ evInfix (S.Infix op e1 e2) = do
 			S.LThan  -> OBool (x < y)
 			S.GThan  -> OBool (x > y)
 			S.EqEq   -> OBool (x == y)
+			S.LTEq   -> OBool (x <= y)
+			S.GTEq   -> OBool (x >= y)
 
 
 evCall :: S.Expr -> Eval (Maybe Object)
+evCall (S.Call "str" [expr]) = do
+	expr' <- evExpr expr
+	case expr' of
+		OInt i    -> return $ Just (OString $ show i)
+		OBool b   -> return $ Just (OString $ show b)
+		OString _ -> return $ Just expr'
+		_         -> err $ show expr ++ " not stringable"
+evCall (S.Call "str" x) =
+	err $ "str does not take " ++ show (length x) ++ " arguments"
 evCall (S.Call name exprs) = do
 	ob <- envGet name
 	(S.LitFunc args blk) <- case ob of

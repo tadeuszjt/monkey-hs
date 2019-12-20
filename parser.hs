@@ -37,15 +37,6 @@ call = do
 	args <- parens $ commaSep expr
 	return $ Call name args
 
-ifExpr :: Parser Expr
-ifExpr = do
-	reserved "if"
-	cnd <- expr
-	ex1 <- braces expr
-	reserved "else"
-	ex2 <- braces expr
-	return $ IfExpr cnd ex1 ex2
-
 table = [
 	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft,
@@ -54,13 +45,14 @@ table = [
 	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft],
 	[Ex.Infix (reservedOp "<" >> return (Infix LThan)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp ">" >> return (Infix GThan)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "==" >> return (Infix EqEq)) Ex.AssocLeft]
+	 Ex.Infix (reservedOp "==" >> return (Infix EqEq)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp "<=" >> return (Infix LTEq)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp ">=" >> return (Infix GTEq)) Ex.AssocLeft]
 	]
 
 term =
 	try call
 	<|> try ident
-	<|> try ifExpr
 	<|> try litInt
 	<|> try litBool
 	<|> try litString
@@ -94,7 +86,8 @@ ifStmt = do
 	reserved "if"
 	cnd <- expr
 	blk <- block
-	return $ IfStmt cnd blk
+	els <- optionMaybe $ reserved "else" >> (try ifStmt <|> block)
+	return $ IfStmt cnd blk els
 
 while :: Parser Stmt
 while = do

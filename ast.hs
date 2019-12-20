@@ -9,6 +9,8 @@ data Op
 	| LThan
 	| GThan
 	| EqEq
+	| LTEq
+	| GTEq
 	deriving (Show, Eq)
 
 data Expr
@@ -19,13 +21,12 @@ data Expr
 	| Call String [Expr]
 	| LitFunc [String] Stmt
 	| Infix Op Expr Expr
-	| IfExpr Expr Expr Expr
 	deriving Show
 
 data Stmt
 	= Assign String Expr
 	| Set String Expr
-	| IfStmt Expr Stmt
+	| IfStmt Expr Stmt (Maybe Stmt)
 	| While Expr Stmt
 	| Return Expr
 	| Block [Stmt]
