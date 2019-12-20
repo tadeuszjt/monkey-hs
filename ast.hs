@@ -11,6 +11,7 @@ data Op
 	| EqEq
 	| LTEq
 	| GTEq
+	| OrOr
 	deriving (Show, Eq)
 
 data Expr

@@ -47,7 +47,8 @@ table = [
 	 Ex.Infix (reservedOp ">" >> return (Infix GThan)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "==" >> return (Infix EqEq)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "<=" >> return (Infix LTEq)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp ">=" >> return (Infix GTEq)) Ex.AssocLeft]
+	 Ex.Infix (reservedOp ">=" >> return (Infix GTEq)) Ex.AssocLeft],
+	[Ex.Infix (reservedOp "||" >> return (Infix OrOr)) Ex.AssocLeft]
 	]
 
 term =
