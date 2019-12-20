@@ -42,7 +42,7 @@ envPush = do
 
 envPop :: Eval ()
 envPop =
-	get >>= put . tail
+	put . tail =<< get
 
 
 envGet :: String -> Eval Object
@@ -79,10 +79,12 @@ execEval ev = do
 	_ <- runMaybeT $ execStateT ev emptyEnv
 	return ()
 
+
 evProg :: S.Program -> Eval ()
 evProg p = do
 	mapM_ evStmt p
 	return ()
+
 
 -- statement functions
 

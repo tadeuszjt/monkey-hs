@@ -20,8 +20,8 @@ litFlt =
 litBool :: Parser Expr
 litBool =
 	fmap LitBool $
-		try (do {reserved "true"; return True})
-		<|> (do {reserved "false"; return False})
+		try (reserved "true" >> return True)
+		<|> (reserved "false" >> return False)
 
 litFunc :: Parser Expr
 litFunc = do
@@ -71,9 +71,8 @@ expr =
 -- Statement Parsers
 
 ret :: Parser Stmt
-ret = do
-	reserved "return"
-	fmap Return expr
+ret =
+	reserved "return" >> fmap Return expr
 
 assign :: Parser Stmt
 assign = do
