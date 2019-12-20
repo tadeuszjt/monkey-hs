@@ -27,6 +27,12 @@ liftMaybe :: Maybe a -> Eval a
 liftMaybe m =
 	lift $ MaybeT (pure m)
 
+check :: Bool -> String -> Eval ()
+check b s =
+	if b
+	then return ()
+	else err s
+
 
 err :: String -> Eval a
 err str = do
@@ -81,53 +87,66 @@ execEval ev = do
 
 
 evProg :: S.Program -> Eval ()
-evProg p = do
-	mapM_ evStmt p
-	return ()
+evProg p =
+	mapM_ evTopStmt p >> return ()
 
 
 -- statement functions
 
-evStmt :: S.Stmt -> Eval ()
-evStmt stmt = case stmt of
+evTopStmt :: S.Stmt -> Eval ()
+evTopStmt stmt = case stmt of
 	S.Assign name expr -> envAdd name =<< evExpr expr
 	S.Set name expr    -> envSet name =<< evExpr expr
-	S.Block s          -> envPush >> mapM_ evStmt s >> envPop
-	S.ExprStmt expr    -> evExprStmt stmt
-	S.IfStmt _ _       -> evIfStmt stmt
-	S.While _ _        -> evWhile stmt
-	_                  -> err $ show stmt ++ " not allowed here"
+	S.ExprStmt _       -> evExprStmt stmt
+	S.Block _          -> do
+		envPush
+		ret <- evBlock stmt
+		envPop
+		case ret of
+			Nothing -> return ()
+			Just _  -> err "error: block returned"
+	_                  -> err $ show stmt ++ " not allowed in top level"
+
+
+evBlock :: S.Stmt -> Eval (Maybe Object)
+evBlock (S.Block [x]) = case x of
+	S.Return expr      -> return . Just =<< evExpr expr
+	S.ExprStmt _       -> evExprStmt x >> return Nothing
+	S.Assign name expr -> evExpr expr >>= envAdd name >> return Nothing
+	S.Set name expr    -> evExpr expr >>= envSet name >> return Nothing
+	S.While _ _        -> evWhile x
+	_                  -> err $ show x ++ " not allowed in block"
+evBlock (S.Block (x:xs)) = do
+	ret <- evBlock (S.Block [x])
+	case ret of
+		Nothing -> evBlock (S.Block xs)
+		Just _  -> return ret
 
 
 evExprStmt :: S.Stmt -> Eval ()
 evExprStmt (S.ExprStmt expr) = case expr of
-	S.Call "print" exp -> mapM_ (liftIO . print) =<< mapM evExpr exp
+	S.Call "print" exp -> liftIO . print =<< mapM evExpr exp
+	S.Call _ _         -> evCall expr >> return ()
 	_                  -> err $ show expr ++ " not allowed as statement"
 
-evFnBlock :: S.Stmt -> Eval [Object]
-evFnBlock (S.Block blk) = case blk of
-	[S.Return expr]   -> fmap (:[]) $ evExpr expr
-	[S.ExprStmt expr] -> fmap (:[]) $ evExpr expr
-	(x:xs)            -> evStmt x >> evFnBlock (S.Block xs)
-	[]                -> return []
 
 
-evIfStmt :: S.Stmt -> Eval ()
-evIfStmt (S.IfStmt cnd blk) = do
-	cnd' <- evExpr cnd
-	case cnd' of
-		OBool True  -> evStmt blk
-		OBool False -> return ()
-		_           -> err "if cnd not bool"
-
-
-evWhile :: S.Stmt -> Eval ()
+evWhile :: S.Stmt -> Eval (Maybe Object)
 evWhile stmt@(S.While cnd blk) = do
 	cnd' <- evExpr cnd
 	case cnd' of
-		OBool True  -> evStmt blk >> evWhile stmt 
-		OBool False -> return ()
+		OBool True  -> do
+			envPush
+			ret <- evBlock blk
+			envPop
+			case ret of
+				Just _  -> return ret
+				Nothing -> evWhile stmt
+		OBool False -> return Nothing
 		_           -> err "while cnd not bool"
+
+
+
 
 -- expression functions
 
@@ -141,8 +160,8 @@ evExpr expr = case expr of
 	S.Call name _ -> do
 		ret <- evCall expr
 		case ret of
-			[ob] -> return ob
-			_    -> err (name ++ " did not return an expression")
+			Just ob -> return ob
+			Nothing -> err (name ++ ": expecting return")
 	_ -> err (show expr ++ ": unknown expr")
 
 
@@ -161,18 +180,23 @@ evInfix (S.Infix op e1 e2) = do
 			S.GThan  -> OBool (x > y)
 			S.EqEq   -> OBool (x == y)
 
-evCall :: S.Expr -> Eval [Object]
+
+evCall :: S.Expr -> Eval (Maybe Object)
 evCall (S.Call name exprs) = do
 	ob <- envGet name
-	let n = length exprs
-	case ob of
-		OFunc (S.LitFunc args blk) -> if length args /= n 
-			then err $ name ++ " does not take " ++ (show n) ++ " args"
-			else do
-				exprs' <- mapM evExpr exprs
-				envPush
-				mapM_ (\(a, e) -> envAdd a e) $ zip args exprs'
-				ret <- evFnBlock blk
-				envPop
-				return ret
-		_ -> err (name ++ " is not a function")
+	(S.LitFunc args blk) <- case ob of
+		OFunc fn -> liftMaybe $ Just fn
+		_        -> err $ "call: " ++ name ++ " isn't a function"
+
+	let nexprs = length exprs
+	check (length args == nexprs) $ name ++ " does not take " ++ show nexprs ++ " args"
+
+	exprs' <- mapM evExpr exprs
+
+	envPush
+	mapM_ (\(n, o) -> envAdd n o) $ zip args exprs'
+	ret <- evBlock blk
+	envPop
+
+	return ret
+
