@@ -11,17 +11,18 @@ ident :: Parser Expr
 ident =
 	fmap Ident identifier
 
-litFlt :: Parser Expr
-litFlt =
-	fmap LitFlt $
-		try $ fmap fromInteger integer
-		<|> float
+litInt :: Parser Expr
+litInt =
+	return . EInt . fromInteger =<< integer
 
 litBool :: Parser Expr
 litBool =
-	fmap LitBool $
-		try (reserved "true" >> return True)
-		<|> (reserved "false" >> return False)
+	try (reserved "true" >> return (EBool True))
+	<|> (reserved "false" >> return (EBool False))
+
+litString :: Parser Expr
+litString =
+	return . EString =<< stringLiteral
 
 litFunc :: Parser Expr
 litFunc = do
@@ -52,15 +53,17 @@ table = [
 	[Ex.Infix (reservedOp "+" >> return (Infix Plus)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft],
 	[Ex.Infix (reservedOp "<" >> return (Infix LThan)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp ">" >> return (Infix GThan)) Ex.AssocLeft]
+	 Ex.Infix (reservedOp ">" >> return (Infix GThan)) Ex.AssocLeft,
+	 Ex.Infix (reservedOp "==" >> return (Infix EqEq)) Ex.AssocLeft]
 	]
 
 term =
 	try call
 	<|> try ident
 	<|> try ifExpr
-	<|> try litFlt
+	<|> try litInt
 	<|> try litBool
+	<|> try litString
 	<|> try litFunc
 	<|> parens expr
 

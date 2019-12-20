@@ -5,7 +5,7 @@ import qualified Text.ParserCombinators.Parsec.Token as Tok
 
 lexer :: Tok.TokenParser()
 lexer = Tok.makeTokenParser emptyDef {
-	Tok.reservedOpNames = ["+", "-", "*", "/", "=", ":=", "<", ">", "%"],
+	Tok.reservedOpNames = ["+", "-", "*", "/", "=", ":=", "<", ">", "%", "=="],
 	Tok.reservedNames = ["return", "fn", "if", "else", "true", "false", "while"]
 }
 

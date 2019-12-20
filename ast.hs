@@ -1,18 +1,20 @@
 module AST where
 
 data Op
-	= Plus
-	| Minus
-	| Times
+	= Times
 	| Divide
+	| Mod
+	| Plus
+	| Minus
 	| LThan
 	| GThan
-	| Mod
+	| EqEq
 	deriving (Show, Eq)
 
 data Expr
-	= LitFlt Double
-	| LitBool Bool
+	= EInt Int
+	| EBool Bool
+	| EString String
 	| Ident String
 	| Call String [Expr]
 	| LitFunc [String] Stmt

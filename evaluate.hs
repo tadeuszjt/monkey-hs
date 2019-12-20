@@ -7,9 +7,9 @@ import qualified AST as S
 import qualified Data.Map as Map
 
 data Object
-	= OFlt Double
-	| OInt Integer
+	= OInt Int
 	| OBool Bool
+	| OString String
 	| OFunc S.Expr
 	| OCall String [S.Expr]
 	deriving Show
@@ -92,12 +92,17 @@ evStmt :: S.Stmt -> Eval ()
 evStmt stmt = case stmt of
 	S.Assign name expr -> envAdd name =<< evExpr expr
 	S.Set name expr    -> envSet name =<< evExpr expr
-	S.ExprStmt expr    -> liftIO . print =<< evExpr expr
 	S.Block s          -> envPush >> mapM_ evStmt s >> envPop
+	S.ExprStmt expr    -> evExprStmt stmt
 	S.IfStmt _ _       -> evIfStmt stmt
 	S.While _ _        -> evWhile stmt
 	_                  -> err $ show stmt ++ " not allowed here"
 
+
+evExprStmt :: S.Stmt -> Eval ()
+evExprStmt (S.ExprStmt expr) = case expr of
+	S.Call "print" exp -> mapM_ (liftIO . print) =<< mapM evExpr exp
+	_                  -> err $ show expr ++ " not allowed as statement"
 
 evFnBlock :: S.Stmt -> Eval [Object]
 evFnBlock (S.Block blk) = case blk of
@@ -128,7 +133,8 @@ evWhile stmt@(S.While cnd blk) = do
 
 evExpr :: S.Expr -> Eval Object
 evExpr expr = case expr of
-	S.LitFlt f    -> return (OFlt f)
+	S.EInt i      -> return (OInt i)
+	S.EString s   -> return (OString s)
 	S.LitFunc _ _ -> return (OFunc expr)
 	S.Ident name  -> envGet name
 	S.Infix _ _ _ -> evInfix expr
@@ -144,12 +150,16 @@ evInfix :: S.Expr -> Eval Object
 evInfix (S.Infix op e1 e2) = do
 	e1' <- evExpr e1
 	e2' <- evExpr e2
-	case (e1', e2', op) of
-		(OFlt x, OFlt y, S.Plus) -> return $ OFlt (x + y)
-		(OFlt x, OFlt y, S.Minus) -> return $ OFlt (x - y)
-		(OFlt x, OFlt y, S.GThan) -> return $ OBool (x > y)
-		(OFlt x, OFlt y, S.LThan) -> return $ OBool (x < y)
-
+	case (e1', e2') of
+		(OInt x, OInt y) -> return $ case op of
+			S.Plus   -> OInt (x + y)
+			S.Minus  -> OInt (x - y)
+			S.Times  -> OInt (x * y)
+			S.Divide -> OInt (x `div` y)
+			S.Mod    -> OInt (x `mod` y)
+			S.LThan  -> OBool (x < y)
+			S.GThan  -> OBool (x > y)
+			S.EqEq   -> OBool (x == y)
 
 evCall :: S.Expr -> Eval [Object]
 evCall (S.Call name exprs) = do
