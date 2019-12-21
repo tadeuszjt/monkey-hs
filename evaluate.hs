@@ -11,8 +11,14 @@ data Object
 	| OBool Bool
 	| OString String
 	| OFunc S.Expr
-	| OCall String [S.Expr]
+	| OArray [Object]
 	deriving Show
+
+instance Show Object where
+	show (OInt i) = show i
+	show (OBool b) = show b
+	show (OString s) = s
+	show (OArray a) = show a
 
 type Env = [Map.Map String Object]
 
