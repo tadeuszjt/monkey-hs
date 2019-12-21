@@ -43,9 +43,8 @@ err str =
 
 
 envPush :: Eval ()
-envPush = do
-	env <- get
-	put $ (Map.empty):env
+envPush = 
+	put . Map.empty . : =<< get
 
 
 envPop :: Eval ()
@@ -55,7 +54,7 @@ envPop =
 
 envGet :: String -> Eval Object
 envGet name = do
-	get >>= envGet' name
+	envGet' name =<< get
 	where
 		envGet' name []     = err $ name ++ " does not exist"
 		envGet' name (x:xs) = case Map.lookup name x of
@@ -65,7 +64,7 @@ envGet name = do
 
 envSet :: String -> Object -> Eval ()
 envSet name ob =
-	get >>= envSet' name ob []
+	envSet' name ob [] =<< get
 	where
 		envSet' name _ _ []       = err $ "set: " ++ name ++ " does not exist"
 		envSet' name ob ps (x:xs) = case Map.lookup name x of
@@ -92,9 +91,8 @@ noReturn str ev = do
 -- main functions
 
 execEval :: Eval a -> IO ()
-execEval ev = do
-	_ <- runMaybeT $ execStateT ev emptyEnv
-	return ()
+execEval ev =
+	runMaybeT (execStateT ev emptyEnv) >> return ()
 
 
 evProg :: S.Program -> Eval ()
