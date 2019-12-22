@@ -41,7 +41,9 @@ array :: Parser Expr
 array =
 	fmap Array $ brackets (commaSep expr)
 
+
 table = [
+	[Ex.Postfix (do { idx <- brackets expr; return (\arr -> Subscript arr idx)})  ],
 	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft,
 	 Ex.Infix (reservedOp "%" >> return (Infix Mod)) Ex.AssocLeft],

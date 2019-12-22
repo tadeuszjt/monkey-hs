@@ -23,7 +23,8 @@ data Expr
 	| LitFunc [String] Stmt
 	| Infix Op Expr Expr
 	| Array [Expr]
-	deriving Show
+	| Subscript Expr Expr
+	deriving (Show, Eq)
 
 data Stmt
 	= Assign String Expr
@@ -33,6 +34,6 @@ data Stmt
 	| Return Expr
 	| Block [Stmt]
 	| ExprStmt Expr
-	deriving (Show)
+	deriving (Show, Eq)
 
 type Program = [Stmt]

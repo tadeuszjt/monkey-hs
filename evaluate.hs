@@ -11,9 +11,13 @@ data Object
 	| OBool Bool
 	| OString String
 	| OFunc S.Expr
-	| OCall String [S.Expr]
-	| OArray [S.Expr]
-	deriving Show
+	| OArray [Object]
+
+instance Show Object where
+	show (OInt i) = show i
+	show (OBool b) = show b
+	show (OString s) = s
+	show (OArray a) = show a
 
 type Env = [Map.Map String Object]
 
@@ -44,9 +48,8 @@ err str =
 
 
 envPush :: Eval ()
-envPush = do
-	env <- get
-	put $ (Map.empty):env
+envPush = 
+	put . (Map.empty:) =<< get
 
 
 envPop :: Eval ()
@@ -56,7 +59,7 @@ envPop =
 
 envGet :: String -> Eval Object
 envGet name = do
-	get >>= envGet' name
+	envGet' name =<< get
 	where
 		envGet' name []     = err $ name ++ " does not exist"
 		envGet' name (x:xs) = case Map.lookup name x of
@@ -66,7 +69,7 @@ envGet name = do
 
 envSet :: String -> Object -> Eval ()
 envSet name ob =
-	get >>= envSet' name ob []
+	envSet' name ob [] =<< get
 	where
 		envSet' name _ _ []       = err $ "set: " ++ name ++ " does not exist"
 		envSet' name ob ps (x:xs) = case Map.lookup name x of
@@ -93,9 +96,8 @@ noReturn str ev = do
 -- main functions
 
 execEval :: Eval a -> IO ()
-execEval ev = do
-	_ <- runMaybeT $ execStateT ev emptyEnv
-	return ()
+execEval ev =
+	runMaybeT (execStateT ev emptyEnv) >> return ()
 
 
 evProg :: S.Program -> Eval ()
@@ -172,19 +174,41 @@ evIfStmt (S.IfStmt cnd blk els) = do
 
 evExpr :: S.Expr -> Eval Object
 evExpr expr = case expr of
-	S.EInt i      -> return (OInt i)
-	S.EBool b     -> return (OBool b)
-	S.EString s   -> return (OString s)
-	S.LitFunc _ _ -> return (OFunc expr)
-	S.Ident name  -> envGet name
-	S.Infix _ _ _ -> evInfix expr
-	S.Array xs    -> return (OArray xs)
+	S.EInt i        -> return (OInt i)
+	S.EBool b       -> return (OBool b)
+	S.EString s     -> return (OString s)
+	S.LitFunc _ _   -> return (OFunc expr)
+	S.Array xs      -> return . OArray =<< mapM evExpr xs
+	S.Ident name    -> envGet name
+	S.Infix _ _ _   -> evInfix expr
+	S.Subscript _ _ -> evSubscript expr
 	S.Call name _ -> do
 		ret <- evCall expr
 		case ret of
 			Just ob -> return ob
 			Nothing -> err (name ++ ": expecting return")
 	_ -> err (show expr ++ ": unknown expr")
+
+evSubscript :: S.Expr -> Eval Object
+evSubscript (S.Subscript arr acc) = do
+	arr' <- evExpr arr
+	arr'' <- case arr' of
+		OArray a -> suc a
+		_        -> err $ show arr' ++ " isn't an array"
+
+	let len = length arr''
+
+	acc' <- evExpr acc
+	idx <- case acc' of
+		OInt i -> suc i
+		_      -> err $ show acc' ++ " used for array access"
+
+	if idx < 0 || idx > (len - 1)
+	then err $ show arr' ++ " array index out of bounds"
+	else return $ arr'' !! idx
+
+	
+	
 
 
 evInfix :: S.Expr -> Eval Object
@@ -243,6 +267,7 @@ evBuiltin "print" args = case args of
 			OInt i    -> suc $ show i
 			OBool b   -> suc $ show b
 			OString s -> suc s
+			OArray a  -> suc $ show a
 			_         -> err $ "cannot print " ++ show arg'
 		liftIO (putStrLn str)
 		return Nothing
