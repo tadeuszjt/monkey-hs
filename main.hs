@@ -8,6 +8,6 @@ import qualified AST as S
 
 main :: IO ()
 main = do
-	content <- getContents
-	prog <- P.parseStr content
-	E.execEval $ E.evProg prog
+    content <- getContents
+    prog <- P.parseStr content
+    E.execEval $ E.evProg prog

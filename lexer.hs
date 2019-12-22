@@ -5,13 +5,13 @@ import qualified Text.ParserCombinators.Parsec.Token as Tok
 
 lexer :: Tok.TokenParser()
 lexer = Tok.makeTokenParser emptyDef {
-	Tok.reservedOpNames = [
-		"+", "-", "*", "/", "=", ":=", "<", ">", "%", "==", "<=", ">=", "||"
-		],
-	Tok.reservedNames = [
-		"return", "fn", "if", "else", "true", "false", "while"
-		],
-	Tok.commentLine = "#"
+    Tok.reservedOpNames = [
+        "+", "-", "*", "/", "=", ":=", "<", ">", "%", "==", "<=", ">=", "||"
+        ],
+    Tok.reservedNames = [
+        "return", "fn", "if", "else", "true", "false", "while"
+        ],
+    Tok.commentLine = "#"
 }
 
 identifier = Tok.identifier lexer
