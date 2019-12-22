@@ -143,8 +143,9 @@ evWhile :: S.Stmt -> Eval (Maybe Object)
 evWhile stmt@(S.While cnd blk) = do
 	cnd' <- evExpr cnd
 	bool <- case cnd' of
-		(OBool b) -> liftMaybe $ Just b
+		(OBool b) -> suc b
 		_         -> err "while cnd not bool"
+
 	if bool == False
 	then return Nothing
 	else do
@@ -160,8 +161,9 @@ evIfStmt :: S.Stmt -> Eval (Maybe Object)
 evIfStmt (S.IfStmt cnd blk els) = do
 	cnd' <- evExpr cnd
 	bool <- case cnd' of
-		(OBool b) -> liftMaybe $ Just b
+		(OBool b) -> suc b
 		_         -> err $ "if cnd not bool"
+
 	if bool
 	then evBlock blk
 	else case els of
@@ -189,6 +191,7 @@ evExpr expr = case expr of
 			Nothing -> err (name ++ ": expecting return")
 	_ -> err (show expr ++ ": unknown expr")
 
+
 evSubscript :: S.Expr -> Eval Object
 evSubscript (S.Subscript arr acc) = do
 	arr' <- evExpr arr
@@ -206,9 +209,6 @@ evSubscript (S.Subscript arr acc) = do
 	if idx < 0 || idx > (len - 1)
 	then err $ show arr' ++ " array index out of bounds"
 	else return $ arr'' !! idx
-
-	
-	
 
 
 evInfix :: S.Expr -> Eval Object
@@ -246,7 +246,7 @@ evCall (S.Call "str" x) =
 evCall (S.Call name exprs) = do
 	ob <- envGet name
 	(S.LitFunc args blk) <- case ob of
-		OFunc fn -> liftMaybe $ Just fn
+		OFunc fn -> suc fn
 		_        -> err $ "call: " ++ name ++ " isn't a function"
 	let nexprs = length exprs
 	check (length args == nexprs) $ name ++ " does not take " ++ show nexprs ++ " args"
@@ -266,9 +266,10 @@ evBuiltin "print" args = case args of
 		str <- case arg' of
 			OInt i    -> suc $ show i
 			OBool b   -> suc $ show b
-			OString s -> suc s
 			OArray a  -> suc $ show a
+			OString s -> suc s
 			_         -> err $ "cannot print " ++ show arg'
+
 		liftIO (putStrLn str)
 		return Nothing
 	(x:xs) ->

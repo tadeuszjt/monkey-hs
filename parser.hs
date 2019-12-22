@@ -42,19 +42,23 @@ array =
 	fmap Array $ brackets (commaSep expr)
 
 
+-- recursive left grammar postfix
+recPostfix p = Ex.Postfix $ chainl1 p (return $ flip (.))
+binary name op assoc = Ex.Infix (reservedOp name >> return (Infix op)) assoc
+
 table = [
-	[Ex.Postfix (do { idx <- brackets expr; return (\arr -> Subscript arr idx)})  ],
-	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "/" >> return (Infix Divide)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "%" >> return (Infix Mod)) Ex.AssocLeft],
-	[Ex.Infix (reservedOp "+" >> return (Infix Plus)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "-" >> return (Infix Minus)) Ex.AssocLeft],
-	[Ex.Infix (reservedOp "<" >> return (Infix LThan)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp ">" >> return (Infix GThan)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "==" >> return (Infix EqEq)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp "<=" >> return (Infix LTEq)) Ex.AssocLeft,
-	 Ex.Infix (reservedOp ">=" >> return (Infix GTEq)) Ex.AssocLeft],
-	[Ex.Infix (reservedOp "||" >> return (Infix OrOr)) Ex.AssocLeft]
+	[recPostfix (fmap (flip Subscript) $ brackets expr)],
+	[binary "*" Times Ex.AssocLeft,
+	 binary "/" Divide Ex.AssocLeft,
+	 binary "%" Mod Ex.AssocLeft],
+	[binary "+" Plus Ex.AssocLeft,
+	 binary "-" Minus Ex.AssocLeft],
+	[binary "<" LThan Ex.AssocLeft,
+	 binary ">" GThan Ex.AssocLeft,
+	 binary "==" EqEq Ex.AssocLeft,
+	 binary "<=" LTEq Ex.AssocLeft,
+	 binary ">=" GTEq Ex.AssocLeft],
+	[binary "||" OrOr Ex.AssocLeft]
 	]
 
 term =
