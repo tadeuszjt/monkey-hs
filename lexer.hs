@@ -26,3 +26,4 @@ reserved = Tok.reserved lexer
 reservedOp = Tok.reservedOp lexer
 parens = Tok.parens lexer
 braces = Tok.braces lexer
+brackets = Tok.brackets lexer

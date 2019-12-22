@@ -12,6 +12,7 @@ data Object
 	| OString String
 	| OFunc S.Expr
 	| OCall String [S.Expr]
+	| OArray [S.Expr]
 	deriving Show
 
 type Env = [Map.Map String Object]
@@ -177,6 +178,7 @@ evExpr expr = case expr of
 	S.LitFunc _ _ -> return (OFunc expr)
 	S.Ident name  -> envGet name
 	S.Infix _ _ _ -> evInfix expr
+	S.Array xs    -> return (OArray xs)
 	S.Call name _ -> do
 		ret <- evCall expr
 		case ret of

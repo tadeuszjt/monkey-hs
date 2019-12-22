@@ -22,6 +22,7 @@ data Expr
 	| Call String [Expr]
 	| LitFunc [String] Stmt
 	| Infix Op Expr Expr
+	| Array [Expr]
 	deriving Show
 
 data Stmt

@@ -36,6 +36,10 @@ call = do
 	(Ident name) <- ident
 	args <- parens $ commaSep expr
 	return $ Call name args
+	
+array :: Parser Expr
+array =
+	fmap Array $ brackets (commaSep expr)
 
 table = [
 	[Ex.Infix (reservedOp "*" >> return (Infix Times)) Ex.AssocLeft,
@@ -58,6 +62,7 @@ term =
 	<|> try litBool
 	<|> try litString
 	<|> try litFunc
+	<|> try array
 	<|> parens expr
 
 expr :: Parser Expr
