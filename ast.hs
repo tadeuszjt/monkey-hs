@@ -18,9 +18,9 @@ data Expr
 	= EInt Int
 	| EBool Bool
 	| EString String
+	| Func [String] Stmt
 	| Ident String
 	| Call String [Expr]
-	| LitFunc [String] Stmt
 	| Infix Op Expr Expr
 	| Array [Expr]
 	| Subscript Expr Expr

@@ -3,23 +3,10 @@ module Evaluate where
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 
-import qualified AST as S
+import AST
 import qualified Data.Map as Map
 
-data Object
-	= OInt Int
-	| OBool Bool
-	| OString String
-	| OFunc S.Expr
-	| OArray [Object]
-
-instance Show Object where
-	show (OInt i) = show i
-	show (OBool b) = show b
-	show (OString s) = s
-	show (OArray a) = show a
-
-type Env = [Map.Map String Object]
+type Env = [Map.Map String Expr]
 
 emptyEnv :: Env
 emptyEnv =
@@ -57,35 +44,35 @@ envPop =
 	put . tail =<< get
 
 
-envGet :: String -> Eval Object
+envGet :: String -> Eval Expr
 envGet name = do
 	envGet' name =<< get
 	where
 		envGet' name []     = err $ name ++ " does not exist"
 		envGet' name (x:xs) = case Map.lookup name x of
-			Just ob -> return ob
+			Just ex -> return ex
 			Nothing -> envGet' name xs
 
 
-envSet :: String -> Object -> Eval ()
-envSet name ob =
-	envSet' name ob [] =<< get
+envSet :: String -> Expr -> Eval ()
+envSet name ex =
+	envSet' name ex [] =<< get
 	where
 		envSet' name _ _ []       = err $ "set: " ++ name ++ " does not exist"
-		envSet' name ob ps (x:xs) = case Map.lookup name x of
-			Just _  -> put $ ps ++ (Map.insert name ob x):xs
-			Nothing -> envSet' name ob (ps ++ [x]) xs
+		envSet' name ex ps (x:xs) = case Map.lookup name x of
+			Just _  -> put $ ps ++ (Map.insert name ex x):xs
+			Nothing -> envSet' name ex (ps ++ [x]) xs
 	
 
-envAdd :: String -> Object -> Eval ()
-envAdd name ob = do
+envAdd :: String -> Expr -> Eval ()
+envAdd name ex = do
 	(x:xs) <- get
 	case Map.lookup name x of
-		Nothing -> put $ (Map.insert name ob x):xs
+		Nothing -> put $ (Map.insert name ex x):xs
 		Just _  -> err $ name ++ " already defined"
 		
 
-noReturn :: String -> Eval (Maybe Object) -> Eval ()
+noReturn :: String -> Eval (Maybe Expr) -> Eval ()
 noReturn str ev = do
 	ret <- ev
 	case ret of
@@ -100,50 +87,50 @@ execEval ev =
 	runMaybeT (execStateT ev emptyEnv) >> return ()
 
 
-evProg :: S.Program -> Eval ()
+evProg :: Program -> Eval ()
 evProg p =
 	mapM_ evTopStmt p >> return ()
 
 
 -- statement functions
 
-evTopStmt :: S.Stmt -> Eval ()
+evTopStmt :: Stmt -> Eval ()
 evTopStmt stmt = case stmt of
-	S.Assign name expr -> envAdd name =<< evExpr expr
-	S.Set name expr    -> envSet name =<< evExpr expr
-	S.ExprStmt _       -> evExprStmt stmt
-	S.While _ _        -> evWhile stmt >> return ()
-	S.Block _          -> noReturn "block" $ do {envPush; ret <- evBlock stmt; envPop; return ret}
+	Assign name expr -> envAdd name =<< evExpr expr
+	Set name expr    -> envSet name =<< evExpr expr
+	ExprStmt _       -> evExprStmt stmt
+	While _ _        -> evWhile stmt >> return ()
+	Block _          -> noReturn "block" $ do {envPush; ret <- evBlock stmt; envPop; return ret}
 	_ -> err $ show stmt ++ " not allowed in top level"
 
 
-evBlock :: S.Stmt -> Eval (Maybe Object)
-evBlock (S.Block [x]) = case x of
-	S.Return expr      -> return . Just =<< evExpr expr
-	S.ExprStmt _       -> evExprStmt x >> return Nothing
-	S.Assign name expr -> evExpr expr >>= envAdd name >> return Nothing
-	S.Set name expr    -> evExpr expr >>= envSet name >> return Nothing
-	S.While _ _        -> evWhile x
-	S.IfStmt _ _ _     -> evIfStmt x
+evBlock :: Stmt -> Eval (Maybe Expr)
+evBlock (Block [x]) = case x of
+	Return expr      -> return . Just =<< evExpr expr
+	ExprStmt _       -> evExprStmt x >> return Nothing
+	Assign name expr -> evExpr expr >>= envAdd name >> return Nothing
+	Set name expr    -> evExpr expr >>= envSet name >> return Nothing
+	While _ _        -> evWhile x
+	IfStmt _ _ _     -> evIfStmt x
 	_                  -> err $ show x ++ " not allowed in block"
-evBlock (S.Block (x:xs)) = do
-	ret <- evBlock (S.Block [x])
+evBlock (Block (x:xs)) = do
+	ret <- evBlock (Block [x])
 	case ret of
-		Nothing -> evBlock (S.Block xs)
+		Nothing -> evBlock (Block xs)
 		Just _  -> return ret
 
 
-evExprStmt :: S.Stmt -> Eval ()
-evExprStmt (S.ExprStmt expr) = case expr of
-	S.Call _ _         -> evCall expr >> return ()
+evExprStmt :: Stmt -> Eval ()
+evExprStmt (ExprStmt expr) = case expr of
+	Call _ _         -> evCall expr >> return ()
 	_                  -> err $ show expr ++ " not allowed as statement"
 
 
-evWhile :: S.Stmt -> Eval (Maybe Object)
-evWhile stmt@(S.While cnd blk) = do
+evWhile :: Stmt -> Eval (Maybe Expr)
+evWhile stmt@(While cnd blk) = do
 	cnd' <- evExpr cnd
 	bool <- case cnd' of
-		(OBool b) -> suc b
+		(EBool b) -> suc b
 		_         -> err "while cnd not bool"
 
 	if bool == False
@@ -157,53 +144,56 @@ evWhile stmt@(S.While cnd blk) = do
 			Nothing -> evWhile stmt
 
 
-evIfStmt :: S.Stmt -> Eval (Maybe Object)
-evIfStmt (S.IfStmt cnd blk els) = do
+evIfStmt :: Stmt -> Eval (Maybe Expr)
+evIfStmt (IfStmt cnd blk els) = do
 	cnd' <- evExpr cnd
 	bool <- case cnd' of
-		(OBool b) -> suc b
+		(EBool b) -> suc b
 		_         -> err $ "if cnd not bool"
 
 	if bool
 	then evBlock blk
 	else case els of
 		Nothing               -> return Nothing
-		Just (S.IfStmt c b e) -> evIfStmt (S.IfStmt c b e)
-		Just (S.Block b)      -> evBlock (S.Block b)
+		Just (IfStmt c b e) -> evIfStmt (IfStmt c b e)
+		Just (Block b)      -> evBlock (Block b)
 
 
 -- expression functions
 
-evExpr :: S.Expr -> Eval Object
+evExpr :: Expr -> Eval Expr
 evExpr expr = case expr of
-	S.EInt i        -> return (OInt i)
-	S.EBool b       -> return (OBool b)
-	S.EString s     -> return (OString s)
-	S.LitFunc _ _   -> return (OFunc expr)
-	S.Array xs      -> return . OArray =<< mapM evExpr xs
-	S.Ident name    -> envGet name
-	S.Infix _ _ _   -> evInfix expr
-	S.Subscript _ _ -> evSubscript expr
-	S.Call name _ -> do
-		ret <- evCall expr
-		case ret of
-			Just ob -> return ob
-			Nothing -> err (name ++ ": expecting return")
-	_ -> err (show expr ++ ": unknown expr")
+	EInt _        -> return expr
+	EBool _       -> return expr
+	EString _     -> return expr
+	Func _ _      -> return expr
+	Infix _ _ _   -> evInfix expr
+	Call _ _      -> evExprCall expr
+	Subscript _ _ -> evSubscript expr
+	Ident name    -> envGet name
+	Array xs      -> return . Array =<< mapM evExpr xs
 
 
-evSubscript :: S.Expr -> Eval Object
-evSubscript (S.Subscript arr acc) = do
-	arr' <- evExpr arr
+evExprCall :: Expr -> Eval Expr
+evExprCall expr = do
+	ret <- evCall expr
+	case ret of
+		Just ex -> return ex
+		Nothing -> err $ show expr ++ " used as expression, expecting return"
+
+
+evSubscript :: Expr -> Eval Expr
+evSubscript (Subscript arr acc) = do
+	arr'  <- evExpr arr
 	arr'' <- case arr' of
-		OArray a -> suc a
-		_        -> err $ show arr' ++ " isn't an array"
+		Array a -> suc a
+		_       -> err $ show arr' ++ " isn't an array"
 
 	let len = length arr''
 
 	acc' <- evExpr acc
 	idx <- case acc' of
-		OInt i -> suc i
+		EInt i -> suc i
 		_      -> err $ show acc' ++ " used for array access"
 
 	if idx < 0 || idx > (len - 1)
@@ -211,37 +201,41 @@ evSubscript (S.Subscript arr acc) = do
 	else return $ arr'' !! idx
 
 
-evInfix :: S.Expr -> Eval Object
-evInfix (S.Infix op e1 e2) = do
+evInfix :: Expr -> Eval Expr
+evInfix (Infix op e1 e2) = do
 	e1' <- evExpr e1
 	e2' <- evExpr e2
 	case (e1', e2') of
-		(OInt x, OInt y) -> return $ case op of
-			S.Plus   -> OInt (x + y)
-			S.Minus  -> OInt (x - y)
-			S.Times  -> OInt (x * y)
-			S.Divide -> OInt (x `div` y)
-			S.Mod    -> OInt (x `mod` y)
-			S.LThan  -> OBool (x < y)
-			S.GThan  -> OBool (x > y)
-			S.EqEq   -> OBool (x == y)
-			S.LTEq   -> OBool (x <= y)
-			S.GTEq   -> OBool (x >= y)
-		(OBool x, OBool y) -> return $ case op of
-			S.OrOr -> OBool (x || y)
+		(EInt x, EInt y) -> return $ case op of
+			Plus   -> EInt (x + y)
+			Minus  -> EInt (x - y)
+			Times  -> EInt (x * y)
+			Divide -> EInt (x `div` y)
+			Mod    -> EInt (x `mod` y)
+			LThan  -> EBool (x < y)
+			GThan  -> EBool (x > y)
+			EqEq   -> EBool (x == y)
+			LTEq   -> EBool (x <= y)
+			GTEq   -> EBool (x >= y)
+		(EBool x, EBool y) -> return $ case op of
+			OrOr -> EBool (x || y)
 
 
-evCall :: S.Expr -> Eval (Maybe Object)
-evCall (S.Call "print" args) = evBuiltin "print" args
-evCall (S.Call "len" args)   = evBuiltin "len" args
-evCall (S.Call "str" args)   = evBuiltin "str" args
-evCall (S.Call name exprs) = do
-	ob <- envGet name
-	(S.LitFunc args blk) <- case ob of
-		OFunc fn -> suc fn
+evCall :: Expr -> Eval (Maybe Expr)
+evCall (Call "print" args) = evBuiltin "print" args
+evCall (Call "len" args)   = evBuiltin "len" args
+evCall (Call "str" args)   = evBuiltin "str" args
+evCall (Call name exprs)   = do
+	ex <- envGet name
+	(args, blk) <- case ex of
+		Func a b -> suc (a, b)
 		_        -> err $ "call: " ++ name ++ " isn't a function"
+		
 	let nexprs = length exprs
-	check (length args == nexprs) $ name ++ " does not take " ++ show nexprs ++ " args"
+	if length args /= nexprs
+	then err $ name ++ " does not take " ++ show nexprs ++ " args"
+	else suc ()
+
 	exprs' <- mapM evExpr exprs
 	envPush
 	mapM_ (\(n, o) -> envAdd n o) $ zip args exprs'
@@ -250,7 +244,7 @@ evCall (S.Call name exprs) = do
 	return ret
 
 
-evBuiltin :: String -> [S.Expr] -> Eval (Maybe Object)
+evBuiltin :: String -> [Expr] -> Eval (Maybe Expr)
 evBuiltin "str" args = do
 	arg <- case args of
 		[a] -> suc a
@@ -259,19 +253,19 @@ evBuiltin "str" args = do
 	exp <- evExpr arg
 
 	s <- case exp of
-		OInt i    -> suc $ show i
-		OBool b   -> suc $ show b
-		OArray a  -> suc $ show a
-		OString s -> suc s
+		EInt i    -> suc $ show i
+		EBool b   -> suc $ show b
+		Array a   -> suc $ show a
+		EString s -> suc s
 		_         -> err $ "cannot stringify " ++ show arg
 
-	return $ Just (OString s)
+	return $ Just (EString s)
 
 
 evBuiltin "print" args = case args of
 	[]    -> liftIO (putStrLn "") >> return Nothing
 	[arg] -> do
-		Just (OString str) <- evBuiltin "str" args
+		Just (EString str) <- evBuiltin "str" args
 		liftIO (putStrLn str)
 		return Nothing
 	(x:xs) ->
@@ -283,13 +277,13 @@ evBuiltin "print" args = case args of
 evBuiltin "len" args = do
 	let nargs = length args
 
-	arg <- case nargs of
-		1 -> suc $ head args
-		_ -> err $ "len does not take " ++ show nargs ++ " args"
+	arg <- case args of
+		[arg] -> suc arg
+		_     -> err $ "len does not take " ++ show (length args) ++ " args"
 
 	arg' <- evExpr arg
 	arr <- case arg' of
-		OArray a -> suc a
-		_        -> err $ "len: " ++ show arg ++ " is not array"
+		Array a -> suc a
+		_       -> err $ "len: " ++ show arg ++ " is not an array"
 
-	return $ Just (OInt $ length arr)
+	return $ Just (EInt $ length arr)

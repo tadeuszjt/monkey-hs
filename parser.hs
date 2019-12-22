@@ -29,7 +29,7 @@ litFunc = do
 	reserved "fn"
 	args <- parens $ commaSep identifier
 	blck <- block
-	return $ LitFunc args blck
+	return $ Func args blck
 
 call :: Parser Expr
 call = do
