@@ -232,17 +232,9 @@ evInfix (S.Infix op e1 e2) = do
 
 
 evCall :: S.Expr -> Eval (Maybe Object)
-evCall (S.Call "print" args) =
-	evBuiltin "print" args
-evCall (S.Call "str" [expr]) = do
-	expr' <- evExpr expr
-	case expr' of
-		OInt i    -> return $ Just (OString $ show i)
-		OBool b   -> return $ Just (OString $ show b)
-		OString _ -> return $ Just expr'
-		_         -> err $ show expr ++ " not stringable"
-evCall (S.Call "str" x) =
-	err $ "str does not take " ++ show (length x) ++ " arguments"
+evCall (S.Call "print" args) = evBuiltin "print" args
+evCall (S.Call "len" args)   = evBuiltin "len" args
+evCall (S.Call "str" args)   = evBuiltin "str" args
 evCall (S.Call name exprs) = do
 	ob <- envGet name
 	(S.LitFunc args blk) <- case ob of
@@ -259,22 +251,45 @@ evCall (S.Call name exprs) = do
 
 
 evBuiltin :: String -> [S.Expr] -> Eval (Maybe Object)
+evBuiltin "str" args = do
+	arg <- case args of
+		[a] -> suc a
+		_   -> err $ "str does not take " ++ (show $ length args) ++ " args"
+
+	exp <- evExpr arg
+
+	s <- case exp of
+		OInt i    -> suc $ show i
+		OBool b   -> suc $ show b
+		OArray a  -> suc $ show a
+		OString s -> suc s
+		_         -> err $ "cannot stringify " ++ show arg
+
+	return $ Just (OString s)
+
+
 evBuiltin "print" args = case args of
 	[]    -> liftIO (putStrLn "") >> return Nothing
 	[arg] -> do
-		arg' <- evExpr arg
-		str <- case arg' of
-			OInt i    -> suc $ show i
-			OBool b   -> suc $ show b
-			OArray a  -> suc $ show a
-			OString s -> suc s
-			_         -> err $ "cannot print " ++ show arg'
-
+		Just (OString str) <- evBuiltin "str" args
 		liftIO (putStrLn str)
 		return Nothing
 	(x:xs) ->
 		evBuiltin "print" [x] >>
 		liftIO (putStr ", ") >>
 		evBuiltin "print" xs
-	
 
+
+evBuiltin "len" args = do
+	let nargs = length args
+
+	arg <- case nargs of
+		1 -> suc $ head args
+		_ -> err $ "len does not take " ++ show nargs ++ " args"
+
+	arg' <- evExpr arg
+	arr <- case arg' of
+		OArray a -> suc a
+		_        -> err $ "len: " ++ show arg ++ " is not array"
+
+	return $ Just (OInt $ length arr)
