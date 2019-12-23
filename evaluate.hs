@@ -39,7 +39,7 @@ envPop =
 
 
 envGet :: String -> Eval Expr
-envGet name = do
+envGet name =
     envGet' name =<< get
     where
         envGet' name []     = err $ name ++ " does not exist"
@@ -83,7 +83,7 @@ execEval ev =
 
 evProg :: Program -> Eval ()
 evProg p =
-    mapM_ evTopStmt p >> return ()
+    mapM_ evTopStmt p
 
 
 -- statement functions
@@ -94,7 +94,7 @@ evTopStmt stmt = case stmt of
     ExprStmt _       -> evExprStmt stmt
     Assign name expr -> envAdd name =<< evExpr expr
     Set name expr    -> envSet name =<< evExpr expr
-    While _ _        -> evWhile stmt >> return ()
+    While _ _        -> noReturn "while" $ evWhile stmt
     _ -> err $ show stmt ++ " not allowed in top level"
 
 
@@ -117,7 +117,7 @@ evBlock (Block [x]) = case x of
     Set name expr    -> evExpr expr >>= envSet name >> return Nothing
     While _ _        -> evWhile x
     IfStmt _ _ _     -> evIfStmt x
-    _                  -> err $ show x ++ " not allowed in block"
+    _                -> err $ show x ++ " not allowed in block"
 evBlock (Block (x:xs)) = do
     ret <- evBlock (Block [x])
     case ret of
@@ -204,7 +204,7 @@ evSubscript (Subscript arr acc) = do
     if idx < 0 || idx > (len - 1)
     then err $ show arr' ++ " array index out of bounds"
     else return $ arr'' !! idx
-
+ 
 
 evInfix :: Expr -> Eval Expr
 evInfix (Infix op e1 e2) = do
@@ -224,6 +224,8 @@ evInfix (Infix op e1 e2) = do
             GTEq   -> EBool (x >= y)
         (EBool x, EBool y) -> return $ case op of
             OrOr -> EBool (x || y)
+        (EString x, EString y) -> return $ case op of
+            Plus -> EString (x ++ y)
 
 
 evCall :: Expr -> Eval (Maybe Expr)
@@ -253,7 +255,7 @@ evBuiltin :: String -> [Expr] -> Eval (Maybe Expr)
 evBuiltin "str" args = do
     arg <- case args of
         [a] -> suc a
-        _   -> err $ "str does not take " ++ (show $ length args) ++ " args"
+        _   -> err $ "str does not take " ++ show (length args) ++ " args"
 
     exp <- evExpr arg
 
