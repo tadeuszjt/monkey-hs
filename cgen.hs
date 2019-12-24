@@ -12,6 +12,7 @@ incIndent :: CGen
 incIndent =
 	modify (1+)
 
+
 decIndent :: CGen
 decIndent =
 	modify (-1+)
@@ -19,13 +20,20 @@ decIndent =
 
 cgenProg :: Prog -> CGen
 cgenProg prog = do
-	liftIO $ putStrLn "#include <stdio.h>"
-	liftIO $ putStrLn "#include <stdbool.h>"
-	liftIO $ putStrLn "int main() {"
+	mapM_ cgenLine [
+		"#include <stdio.h>",
+		"#include <stdbool.h>"
+		]
+
+	cgenLine ""
+	cgenLine "int main() {"
+
 	incIndent
 	mapM cgenOpn (ops prog)
+	cgenLine "return 0;"
 	decIndent
-	liftIO $ putStrLn "}"
+
+	cgenLine "}"
 	return ()
 
 
@@ -43,21 +51,15 @@ cgenStmt str =
 cgenOpn :: Opn -> CGen
 cgenOpn opn = case opn of
 	Assign str val   -> cgenStmt $ strType (typeOf val) ++ " " ++ str ++ " = " ++ strVal val
-	Set str (VInt i) -> cgenStmt $ str ++  " = " ++ show i
-	While  _         -> cgenWhile opn
+	Set str val      -> cgenStmt $ str ++  " = " ++ strVal val
+	Loop             -> cgenLine "" >> cgenLine "for (;;) {" >> incIndent
+	LoopBreak val    -> cgenLine ("if ((" ++ strVal val ++ ") == false) break;") >> cgenLine ""
+	EndLoop          -> decIndent >> cgenLine "}"
+
 	Print val        -> case typeOf val of
 		TInt  -> cgenStmt $ "printf(\"%d\\n\", " ++ strVal val ++ ")" 
 		TBool -> cgenStmt $ "puts(" ++ strVal val ++ " ? \"true\" : \"false\")"
 
-
-cgenWhile :: Opn -> CGen
-cgenWhile (While cnd) = do
-	cgenLine ""
-	cgenLine $ "while (" ++ strVal cnd ++ ") {"
-	incIndent
-	decIndent
-	cgenLine "}"
-	
 
 strType :: Type -> String
 strType typ = case typ of
@@ -72,7 +74,6 @@ strVal val = case val of
 	VBool False         -> "false"
 	VIdent s _          -> s
 	VInfix op v1 v2 typ -> strVal v1 ++ " " ++ strOp op ++ " " ++ strVal v2
-	_ -> error "strVal invalid"
 
 
 strOp :: A.Op -> String
@@ -82,6 +83,7 @@ strOp op = case op of
 	A.Times  -> "*"
 	A.Divide -> "/"
 	A.LThan  -> "<"
+	A.GThan  -> ">"
 	A.Mod    -> "%"
 	A.OrOr   -> "||"
 	_ -> error "strOp invalid"

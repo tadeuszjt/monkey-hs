@@ -32,28 +32,31 @@ data Opn
 	= Assign String Val
 	| Set String Val
 	| Print Val
-	| While Val
+	| Loop
+	| LoopBreak Val
+	| EndLoop
 	deriving Show
 
 data BlockState
 	= BlockState {
-		idCount :: Int,
 		symTab  :: Map String Val -- always ident
 		}
 	deriving Show
 
-emptyBlock = BlockState 0 Map.empty
+emptyBlock = BlockState Map.empty
 
 data CmpState
 	= CmpState {
-		blocks :: [BlockState], -- stack
-		opns   :: [Opn]         -- top level operations
+		idCount :: Int,
+		blocks  :: [BlockState], -- stack
+		opns    :: [Opn]         -- top level operations
 		}
 	deriving Show
 
 emptyCmpState = CmpState {
-	blocks = [emptyBlock],
-	opns   = []
+	idCount = 0,
+	blocks  = [emptyBlock],
+	opns    = []
 	}
 
 type Cmp a = StateT CmpState (Either String) a
@@ -64,11 +67,9 @@ err str =
 
 uniqueId :: Cmp String
 uniqueId = do
-	(block:rest) <- gets blocks
-	modify $ \s -> s {
-		blocks = (block { idCount = idCount block + 1 }):rest
-	}
-	return $ "v" ++ show (idCount block)
+	count <- gets idCount
+	modify $ \s -> s {idCount = count + 1}
+	return $ "v" ++ show count
 
 cmpPush :: Cmp ()
 cmpPush = do
@@ -142,7 +143,9 @@ infixTable = [
 	((TInt, TInt, A.Minus), TInt),
 	((TInt, TInt, A.Times), TInt),
 	((TInt, TInt, A.Divide), TInt),
-	((TInt, TInt, A.LThan), TBool)
+	((TInt, TInt, A.LThan), TBool),
+	((TInt, TInt, A.GThan), TBool),
+	((TBool, TBool, A.OrOr), TBool)
 	]
 
 cmpInfix :: A.Expr -> Cmp Val
@@ -174,11 +177,12 @@ cmpTopStmt stmt = case stmt of
 		assignVar name (VIdent ident $ typeOf val)
 		addOpn $ Assign ident val
 
-	A.Set name (A.EInt i) -> do
+	A.Set name expr -> do
 		(VIdent cname typ) <- getVal name
-		case typ of
-			TInt -> addOpn $ Set cname (VInt i)
-			_    -> err $ show typ ++ " not int"
+		val <- cmpExpr expr
+		if typeOf val == typ
+		then addOpn $ Set cname val
+		else err $ show typ ++ " does not match"
 
 	A.ExprStmt (A.Call "print" [arg]) -> do
 		val <- cmpExpr arg
@@ -186,14 +190,18 @@ cmpTopStmt stmt = case stmt of
 
 
 	A.While cnd (A.Block blk) -> do
+		addOpn $ Loop
 		val <- cmpExpr cnd
+
 		_ <- case typeOf val of
 			TBool -> return ()
 			_     -> err $ "while cnd not bool"
 
-		addOpn $ While val
+		addOpn $ LoopBreak val
 		cmpPush
+		mapM_ cmpTopStmt blk
 		cmpPop
+		addOpn EndLoop
 
-	_                        -> err $ "invalid top stmt: " ++ show stmt
+	_ -> err $ "invalid top stmt: " ++ show stmt
 
