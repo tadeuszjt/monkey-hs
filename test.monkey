@@ -1,9 +1,6 @@
-i := 0;
-x := 1;
-y := 1 + 2;
+x := 0;
 
-print(x);
-
-i = 0;
-
-print(i);
+while (x < 10) {
+	print(x);
+	x = x + 1;
+}
