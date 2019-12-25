@@ -40,7 +40,7 @@ data Opn
 
 data BlockState
 	= BlockState {
-		symTab  :: Map String Val -- always ident
+		symTab  :: Map String (Ident, Type)
 		}
 	deriving Show
 
@@ -62,9 +62,11 @@ emptyCmpState = CmpState {
 
 type Cmp a = StateT CmpState (Either String) a
 
+
 err :: String -> Cmp a
 err str =
 	lift $ (Left str)
+
 
 uniqueId :: Cmp Ident
 uniqueId = do
@@ -72,35 +74,38 @@ uniqueId = do
 	modify $ \s -> s {idCount = count + 1}
 	return count
 
+
 cmpPush :: Cmp ()
 cmpPush = do
 	xs <- gets blocks
 	modify $ \s -> s {blocks = emptyBlock:xs}
+
 
 cmpPop :: Cmp ()
 cmpPop = do
 	xs <- gets blocks
 	modify $ \s -> s {blocks = tail xs}
 
--- lookup ast name, return compiled name, type
-getVal :: String -> Cmp Val -- always ident
+
+getVal :: String -> Cmp Val
 getVal name =
 	getVal' name =<< gets blocks
 	where
 		getVal' name []     = err $ name ++ " does not exist"
 		getVal' name (x:xs) = case Map.lookup name (symTab x) of
-			Just x  -> return x
-			Nothing -> getVal' name xs
+			Just (i, t)  -> return $ VIdent i t
+			Nothing      -> getVal' name xs
 
 
-assignVar :: String -> Val -> Cmp ()
-assignVar name val@(VIdent _ _) = do
+assignId :: String -> Ident -> Type -> Cmp ()
+assignId name id typ = do
 	(block:rest) <- gets blocks
 	let st = symTab block
-	new <- case Map.lookup name st of
+	st' <- case Map.lookup name st of
 		Just _  -> err $ name ++ " already defined"
-		Nothing -> return $ Map.insert name val st
-	modify $ \s -> s { blocks = (block { symTab = new }):rest }
+		Nothing -> return $ Map.insert name (id, typ) st
+
+	modify $ \s -> s { blocks = (block { symTab = st' }):rest }
 
 
 addOpn :: Opn -> Cmp ()
@@ -117,6 +122,7 @@ data Prog
 		ops :: [Opn]
 		}
 	deriving Show
+
 
 evalCmp :: Cmp Prog -> Either String Prog
 evalCmp cmp =
@@ -139,16 +145,6 @@ cmpExpr expr = case expr of
 	_             -> err $ "cmpExpr: " ++ show expr
 
 
-infixTable = [
-	((TInt, TInt, A.Plus), TInt),
-	((TInt, TInt, A.Minus), TInt),
-	((TInt, TInt, A.Times), TInt),
-	((TInt, TInt, A.Divide), TInt),
-	((TInt, TInt, A.LThan), TBool),
-	((TInt, TInt, A.GThan), TBool),
-	((TBool, TBool, A.OrOr), TBool)
-	]
-
 cmpInfix :: A.Expr -> Cmp Val
 cmpInfix (A.Infix op e1 e2) = do
 	v1 <- infVal =<< cmpExpr e1
@@ -160,6 +156,18 @@ cmpInfix (A.Infix op e1 e2) = do
 
 	return $ VInfix op v1 v2 typ
 	where
+		infixTable = [
+			((TInt,  TInt,  A.Plus),   TInt),
+			((TInt,  TInt,  A.Minus),  TInt),
+			((TInt,  TInt,  A.Times),  TInt),
+			((TInt,  TInt,  A.Divide), TInt),
+			((TInt,  TInt,  A.Mod),    TInt),
+			((TInt,  TInt,  A.EqEq),   TBool),
+			((TInt,  TInt,  A.LThan),  TBool),
+			((TInt,  TInt,  A.GThan),  TBool),
+			((TBool, TBool, A.OrOr),   TBool)
+			]
+
 		infVal val = case val of
 			VInt _     -> return val
 			VBool _    -> return val
@@ -175,7 +183,7 @@ cmpStmt stmt = case stmt of
 	A.Assign name expr -> do
 		val <- cmpExpr expr
 		ident <- uniqueId
-		assignVar name (VIdent ident $ typeOf val)
+		assignId name ident (typeOf val)
 		addOpn $ Assign ident val
 
 	A.Set name expr -> do
@@ -193,12 +201,15 @@ cmpStmt stmt = case stmt of
 		addOpn $ LoopBegin
 		val <- cmpExpr cnd
 
-		_ <- case typeOf val of
-			TBool -> return ()
-			_     -> err $ "while cnd not bool"
+		if typeOf val /= TBool
+		then err $ "while cnd not bool"
+		else return ()
 
-		addOpn $ IfBegin val
-		addOpn (LoopBreak)
+		id <- uniqueId
+		addOpn $ Assign id val
+
+		addOpn . IfBegin $ VInfix A.EqEq (VIdent id TBool) (VBool False) TBool
+		addOpn LoopBreak
 		addOpn IfEnd
 
 		cmpPush
@@ -208,19 +219,20 @@ cmpStmt stmt = case stmt of
 
 	A.IfStmt cnd (A.Block blk) els -> do
 		val <- cmpExpr cnd
-		case typeOf val of
-			TBool -> return ()
-			_     -> err $ "if cnd not bool"
+		if typeOf val /= TBool
+		then err $ "if cnd not bool"
+		else return ()
 
-		addOpn $ IfBegin val
+		addOpn (IfBegin val)
 		cmpPush
 		mapM_ cmpStmt blk
 		cmpPop
 		addOpn IfEnd
 
 		case els of
-			Nothing -> return ()
-			Just x  -> addOpn IfElse >> cmpStmt x
+			Nothing            -> return ()
+			Just b@(A.Block _) -> addOpn IfElse >> cmpStmt (A.IfStmt (A.EBool True) b Nothing)
+			Just x             -> addOpn IfElse >> cmpStmt x
 
 	_ -> err $ "invalid top stmt: " ++ show stmt
 

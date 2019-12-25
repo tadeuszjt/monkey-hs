@@ -56,7 +56,7 @@ cgenOpn opn = case opn of
 	LoopBegin     -> cgenLine "" >> cgenLine "for (;;) {" >> incIndent
 	LoopBreak     -> cgenStmt "break" >> cgenLine ""
 	LoopEnd       -> decIndent >> cgenLine "}"
-	IfBegin val   -> cgenLine ("if ((" ++ strVal val ++ ") == false) {") >> incIndent
+	IfBegin val   -> cgenLine ("if (" ++ strVal val ++ ") {") >> incIndent
 	IfEnd         -> decIndent >> cgenLine "}"
 	IfElse        -> cgenLine "else"
 
@@ -98,5 +98,6 @@ strOp op = case op of
 	A.LThan  -> "<"
 	A.GThan  -> ">"
 	A.Mod    -> "%"
+	A.EqEq   -> "=="
 	A.OrOr   -> "||"
 	_ -> error "strOp invalid"
