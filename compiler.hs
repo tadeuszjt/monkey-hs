@@ -31,10 +31,9 @@ typeOf v = case v of
 data Opn
 	= Assign String Val
 	| Set String Val
-	| Print Val
-	| Loop
-	| LoopBreak Val
-	| EndLoop
+	| Print [Val]
+	| LoopBegin   | LoopBreak | LoopEnd
+	| IfBegin Val | IfEnd     | IfElse
 	deriving Show
 
 data BlockState
@@ -124,7 +123,7 @@ evalCmp cmp =
 
 cmpProg :: A.Program -> Cmp Prog
 cmpProg astProg = do
-	mapM_ cmpTopStmt astProg
+	mapM_ cmpStmt astProg
 	ops <- gets opns
 	return (Prog [] ops)
 
@@ -169,8 +168,8 @@ cmpInfix (A.Infix op e1 e2) = do
 				return $ VIdent cname (typeOf val)
 
 
-cmpTopStmt :: A.Stmt -> Cmp ()
-cmpTopStmt stmt = case stmt of
+cmpStmt :: A.Stmt -> Cmp ()
+cmpStmt stmt = case stmt of
 	A.Assign name expr -> do
 		val <- cmpExpr expr
 		ident <- uniqueId
@@ -184,24 +183,42 @@ cmpTopStmt stmt = case stmt of
 		then addOpn $ Set cname val
 		else err $ show typ ++ " does not match"
 
-	A.ExprStmt (A.Call "print" [arg]) -> do
-		val <- cmpExpr arg
-		addOpn $ Print val
-
+	A.ExprStmt (A.Call "print" args) -> do
+		vals <- mapM cmpExpr args
+		addOpn $ Print vals
 
 	A.While cnd (A.Block blk) -> do
-		addOpn $ Loop
+		addOpn $ LoopBegin
 		val <- cmpExpr cnd
 
 		_ <- case typeOf val of
 			TBool -> return ()
 			_     -> err $ "while cnd not bool"
 
-		addOpn $ LoopBreak val
+		addOpn $ IfBegin val
+		addOpn (LoopBreak)
+		addOpn IfEnd
+
 		cmpPush
-		mapM_ cmpTopStmt blk
+		mapM_ cmpStmt blk
 		cmpPop
-		addOpn EndLoop
+		addOpn LoopEnd
+
+	A.IfStmt cnd (A.Block blk) els -> do
+		val <- cmpExpr cnd
+		case typeOf val of
+			TBool -> return ()
+			_     -> err $ "if cnd not bool"
+
+		addOpn $ IfBegin val
+		cmpPush
+		mapM_ cmpStmt blk
+		cmpPop
+		addOpn IfEnd
+
+		case els of
+			Nothing -> return ()
+			Just x  -> addOpn IfElse >> cmpStmt x
 
 	_ -> err $ "invalid top stmt: " ++ show stmt
 

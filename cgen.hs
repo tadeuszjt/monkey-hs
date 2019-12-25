@@ -34,7 +34,7 @@ cgenProg prog = do
 	decIndent
 
 	cgenLine "}"
-	return ()
+
 
 
 cgenLine :: String -> CGen
@@ -50,16 +50,29 @@ cgenStmt str =
 
 cgenOpn :: Opn -> CGen
 cgenOpn opn = case opn of
+	Print _          -> cgenPrint opn
 	Assign str val   -> cgenStmt $ strType (typeOf val) ++ " " ++ str ++ " = " ++ strVal val
 	Set str val      -> cgenStmt $ str ++  " = " ++ strVal val
-	Loop             -> cgenLine "" >> cgenLine "for (;;) {" >> incIndent
-	LoopBreak val    -> cgenLine ("if ((" ++ strVal val ++ ") == false) break;") >> cgenLine ""
-	EndLoop          -> decIndent >> cgenLine "}"
+	LoopBegin        -> cgenLine "" >> cgenLine "for (;;) {" >> incIndent
+	LoopBreak        -> cgenStmt "break" >> cgenLine ""
+	LoopEnd          -> decIndent >> cgenLine "}"
+	IfBegin val      -> cgenLine ("if ((" ++ strVal val ++ ") == false) {") >> incIndent
+	IfEnd            -> decIndent >> cgenLine "}"
+	IfElse           -> cgenLine "else"
 
-	Print val        -> case typeOf val of
-		TInt  -> cgenStmt $ "printf(\"%d\\n\", " ++ strVal val ++ ")" 
-		TBool -> cgenStmt $ "puts(" ++ strVal val ++ " ? \"true\" : \"false\")"
 
+cgenPrint :: Opn -> CGen
+cgenPrint (Print vals) =
+	let (fs, sn) = fmt vals
+	in cgenStmt $ "printf(\"" ++ fs ++ "\\n\", " ++ sn ++ ")"
+	where
+		fmt [val] = case typeOf val of
+			TInt  -> ("%d", strVal val)
+			TBool -> ("%s", strVal val ++ " ? \"true\" : \"false\"")
+		fmt (x:xs) =
+			let (ff, sf) = fmt [x]; (fn, sn) = fmt xs
+			in (ff ++ ", " ++ fn, sf ++ ", " ++ sn)
+	
 
 strType :: Type -> String
 strType typ = case typ of
