@@ -50,15 +50,15 @@ cgenStmt str =
 
 cgenOpn :: Opn -> CGen
 cgenOpn opn = case opn of
-	Print _          -> cgenPrint opn
-	Assign str val   -> cgenStmt $ strType (typeOf val) ++ " " ++ str ++ " = " ++ strVal val
-	Set str val      -> cgenStmt $ str ++  " = " ++ strVal val
-	LoopBegin        -> cgenLine "" >> cgenLine "for (;;) {" >> incIndent
-	LoopBreak        -> cgenStmt "break" >> cgenLine ""
-	LoopEnd          -> decIndent >> cgenLine "}"
-	IfBegin val      -> cgenLine ("if ((" ++ strVal val ++ ") == false) {") >> incIndent
-	IfEnd            -> decIndent >> cgenLine "}"
-	IfElse           -> cgenLine "else"
+	Print _       -> cgenPrint opn
+	Assign id val -> cgenStmt $ strType (typeOf val) ++ " " ++ ("v" ++ show id) ++ " = " ++ strVal val
+	Set id val    -> cgenStmt $ ("v" ++ show id) ++  " = " ++ strVal val
+	LoopBegin     -> cgenLine "" >> cgenLine "for (;;) {" >> incIndent
+	LoopBreak     -> cgenStmt "break" >> cgenLine ""
+	LoopEnd       -> decIndent >> cgenLine "}"
+	IfBegin val   -> cgenLine ("if ((" ++ strVal val ++ ") == false) {") >> incIndent
+	IfEnd         -> decIndent >> cgenLine "}"
+	IfElse        -> cgenLine "else"
 
 
 cgenPrint :: Opn -> CGen
@@ -85,7 +85,7 @@ strVal val = case val of
 	VInt i              -> show i
 	VBool True          -> "true"
 	VBool False         -> "false"
-	VIdent s _          -> s
+	VIdent i _          -> "v" ++ show i
 	VInfix op v1 v2 typ -> strVal v1 ++ " " ++ strOp op ++ " " ++ strVal v2
 
 

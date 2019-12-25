@@ -7,6 +7,8 @@ import qualified AST as A
 
 -- expression types
 
+type Ident = Int
+
 data Type
 	= TInt
 	| TBool
@@ -15,7 +17,7 @@ data Type
 data Val
 	= VInt Int
 	| VBool Bool
-	| VIdent String Type
+	| VIdent Ident Type
 	| VInfix A.Op Val Val Type
 	deriving Show
 
@@ -29,11 +31,11 @@ typeOf v = case v of
 -- CmpState
 
 data Opn
-	= Assign String Val
-	| Set String Val
+	= Assign Ident Val
+	| Set Ident Val
 	| Print [Val]
 	| LoopBegin   | LoopBreak | LoopEnd
-	| IfBegin Val | IfEnd     | IfElse
+	| IfBegin Val | IfElse    | IfEnd
 	deriving Show
 
 data BlockState
@@ -64,11 +66,11 @@ err :: String -> Cmp a
 err str =
 	lift $ (Left str)
 
-uniqueId :: Cmp String
+uniqueId :: Cmp Ident
 uniqueId = do
 	count <- gets idCount
 	modify $ \s -> s {idCount = count + 1}
-	return $ "v" ++ show count
+	return count
 
 cmpPush :: Cmp ()
 cmpPush = do
@@ -163,9 +165,9 @@ cmpInfix (A.Infix op e1 e2) = do
 			VBool _    -> return val
 			VIdent _ _ -> return val
 			_ -> do
-				cname <- uniqueId
-				addOpn $ Assign cname val
-				return $ VIdent cname (typeOf val)
+				id <- uniqueId
+				addOpn $ Assign id val
+				return $ VIdent id (typeOf val)
 
 
 cmpStmt :: A.Stmt -> Cmp ()
