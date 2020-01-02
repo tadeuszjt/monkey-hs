@@ -1,12 +1,16 @@
-x := 0;
-
-while (x < 10 || x < 15) {
-	x = x + 1;
-
-	y := 0;
-	while (y < 4) {
-		print(x);
-		y = y + 1;
+i := 0;
+while (i < 20) {
+	if (i % 2 == 0) {
+		print(i, 2);
+	} else if (i % 3 == 0) {
+		print(i, 3);
+	} else if (i % 4 == 0) {
+		print(i, 4);
+	} else {
+		print("Nothing", i / 2 * 4 + 3);
 	}
 
+	i = i + 1;
 }
+
+

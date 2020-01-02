@@ -1,5 +1,7 @@
 module AST where
 
+type Name = String
+
 data Op
     = Times
     | Divide
@@ -18,21 +20,21 @@ data Expr
     = EInt Int
     | EBool Bool
     | EString String
-    | Func [String] Stmt
-    | Ident String
-    | Call String [Expr]
+    | Func [Name] Stmt
+    | Ident Name 
+    | Call Expr [Expr]
     | Infix Op Expr Expr
     | Array [Expr]
     | Subscript Expr Expr
     deriving (Show, Eq)
 
 data Stmt
-    = Assign String Expr
-    | Set String Expr
+    = Assign Name Expr
+    | Set Name Expr
     | IfStmt Expr Stmt (Maybe Stmt)
     | While Expr Stmt
+	| Block [Stmt]
     | Return Expr
-    | Block [Stmt]
     | ExprStmt Expr
     deriving (Show, Eq)
 

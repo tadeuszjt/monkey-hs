@@ -31,11 +31,6 @@ litFunc = do
     blck <- block
     return $ Func args blck
 
-call :: Parser Expr
-call = do
-    (Ident name) <- ident
-    args <- parens $ commaSep expr
-    return $ Call name args
     
 array :: Parser Expr
 array =
@@ -47,7 +42,8 @@ recPostfix p = Ex.Postfix $ chainl1 p (return $ flip (.))
 binary name op assoc = Ex.Infix (reservedOp name >> return (Infix op)) assoc
 
 table = [
-    [recPostfix (fmap (flip Subscript) $ brackets expr)],
+	[recPostfix (fmap (flip Call) (parens (commaSep expr))),
+     recPostfix (fmap (flip Subscript) (brackets expr))],
     [binary "*" Times Ex.AssocLeft,
      binary "/" Divide Ex.AssocLeft,
      binary "%" Mod Ex.AssocLeft],
@@ -62,8 +58,7 @@ table = [
     ]
 
 term =
-    try call
-    <|> try ident
+    try ident
     <|> try litInt
     <|> try litBool
     <|> try litString
@@ -129,7 +124,7 @@ exprStmt = do
 
 block :: Parser Stmt
 block =
-    fmap Block . braces . many $ statement
+    fmap Block $ braces (many statement)
 
 program :: Parser Program
 program = do
