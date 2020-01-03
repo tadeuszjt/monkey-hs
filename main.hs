@@ -13,6 +13,6 @@ main = do
     content <- getContents
     prog <- P.parseStr content
     case C.evalCmp (C.cmpProg prog) of
-        Left str -> print str
+        Left str -> print ("error: " ++ str)
         Right p  -> execStateT (cgenProg p) 0 >> return ()
 	

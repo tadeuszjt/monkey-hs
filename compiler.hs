@@ -120,6 +120,12 @@ err :: String -> Cmp a
 err str =
 	lift (Left str)
 
+assert :: Bool -> String -> Cmp ()
+assert cnd str =
+	if cnd
+	then return ()
+	else err str
+
 -- program output
 
 data Prog
@@ -202,7 +208,7 @@ cmpStmt stmt = case stmt of
 	A.ExprStmt _   -> cmpExprStmt stmt
 	A.While _ _    -> cmpWhile stmt
 	A.IfStmt _ _ _ -> cmpIf stmt
-	_ -> err $ "error: statement unhandled: " ++ show stmt 
+	_ -> err $ "statement unhandled: " ++ show stmt 
 
 
 cmpAssign :: A.Stmt -> Cmp ()
@@ -218,23 +224,20 @@ cmpSet (A.Set name expr) = do
 	val <- cmpExpr expr
 	if typ == valType val
 	then addOpn (Set id val)
-	else err $ "error: set: type mismatch: " ++ show typ ++ " " ++ show (valType val)
+	else err $ "set: type mismatch: " ++ show typ ++ " " ++ show (valType val)
 
 
 cmpExprStmt :: A.Stmt -> Cmp ()
 cmpExprStmt (A.ExprStmt expr) = case expr of
 	A.Call (A.Ident "print") args -> addOpn . Print =<< mapM cmpExpr args
 	A.Call _ _                    -> cmpCallStmt expr
-	_ -> err $ "error: expr stmt unhandled: " ++ show expr
+	_ -> err $ "expr stmt unhandled: " ++ show expr
 
 
 cmpCallStmt :: A.Expr -> Cmp ()
 cmpCallStmt (A.Call expr []) = do
 	val <- cmpExpr expr
-	case valType val of
-		TFunc -> return ()
-		_     -> err $ "error: isn't func: " ++ show expr
-
+	assert (valType val == TFunc) $ "isn't func: " ++ show expr
 	let VIdent id typ = val
 	addOpn $ Call id
 
@@ -243,10 +246,7 @@ cmpWhile :: A.Stmt -> Cmp ()
 cmpWhile (A.While cnd (A.Block stmts)) = do	
 	addOpn LoopBegin
 	cndVal <- cmpExpr cnd
-
-	if valType cndVal /= TBool
-	then err $ "error: while cnd not bool: " ++ show cnd
-	else return ()
+	assert (valType cndVal == TBool) $ "while cnd not bool: " ++ show cnd
 
 	cndId <- uniqueId 
 	addOpn $ Assign cndId cndVal
@@ -262,9 +262,7 @@ cmpWhile (A.While cnd (A.Block stmts)) = do
 cmpIf :: A.Stmt -> Cmp ()
 cmpIf (A.IfStmt cnd (A.Block stmts) els) = do
 	cndVal <- cmpExpr cnd
-	case valType cndVal of
-		TBool -> return ()
-		_     -> err $ "if cnd not bool: " ++ show cnd
+	assert (valType cndVal == TBool) $ "if cnd not bool: " ++ show cnd
 
 	addOpn $ IfBegin cndVal
 	scope $ mapM_ cmpStmt stmts
@@ -273,6 +271,5 @@ cmpIf (A.IfStmt cnd (A.Block stmts) els) = do
 		Nothing               -> return ()
 		Just (A.Block stmts') -> addOpn IfElse >> scope (mapM_ cmpStmt stmts')
 		Just elif             -> addOpn IfElse >> cmpIf elif
-
 
 	addOpn IfEnd
