@@ -114,7 +114,7 @@ addOpn opn = do
 	let st' = Map.insert curId fn' st
 
 	modify $ \s -> s {symTab = st'} 
-		
+
 
 err :: String -> Cmp a
 err str =
@@ -153,7 +153,7 @@ cmpExpr expr = case expr of
 	A.EInt i      -> return (VInt i)
 	A.EBool b     -> return (VBool b)
 	A.EString s   -> return (VString s)
-	A.Ident s     -> do (id, typ) <- getName s; return $ VIdent id typ
+	A.Ident s     -> getName s >>= \(id, typ) -> return $ VIdent id typ
 	A.Infix _ _ _ -> cmpInfix expr
 	A.Func _ _    -> cmpFuncExpr expr
 	_             -> err $ "cannot compile expression: " ++ show expr
