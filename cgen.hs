@@ -5,6 +5,7 @@ import Control.Monad.State
 import Compiler
 import IR
 import qualified AST as A
+import Data.List
 
 
 -- indentation state
@@ -17,7 +18,7 @@ incIndent =
 
 decIndent :: CGen
 decIndent =
-	modify (-1+)
+	modify (+(-1))
 
 
 -- conversion functions
@@ -32,6 +33,7 @@ strType typ = case typ of
 	TBool   -> "bool"
 	TString -> "char*"
 
+
 strOp :: A.Op -> String
 strOp op = case op of
 	A.Plus   -> "+"
@@ -45,14 +47,14 @@ strOp op = case op of
 	A.OrOr   -> "||"
 	_ -> error "strOp invalid"
 
+
 strVal :: Val -> String
 strVal val = case val of
 	VInt i              -> show i
-	VBool True          -> "true"
-	VBool False         -> "false"
+	VBool b             -> if b then "true" else "false"
 	VString str         -> "\"" ++ str ++ "\""
 	VIdent id _         -> strId id
-	VInfix op v1 v2 typ -> strVal v1 ++ " " ++ strOp op ++ " " ++ strVal v2
+	VInfix op v1 v2 typ -> intercalate " " [strVal v1, strOp op, strVal v2]
 
 
 -- basic generation
@@ -75,7 +77,7 @@ cgenProg prog = do
 		"#include <stdbool.h>"
 		]
 
-	mapM_ (\(id, fn) -> cgenFunc id fn) $ reverse (fns prog)
+	mapM_ (\(id, fn) -> cgenFunc id fn) $ reverse prog
 
 	cgenLine ""
 	cgenLine "int main() {"
@@ -86,12 +88,12 @@ cgenProg prog = do
 	cgenLine "}"
 
 
-cgenFunc :: Ident -> Val -> CGen
-cgenFunc id (VFunc ops) = do
+cgenFunc :: Ident -> Func -> CGen
+cgenFunc id (typ, opns) = do
 	cgenLine ""
 	cgenLine $ "void " ++ strId id ++ "() {"
 	incIndent
-	mapM_ cgenOpn ops
+	mapM_ cgenOpn opns
 	decIndent
 	cgenLine "}"
 
@@ -108,8 +110,6 @@ cgenOpn opn = case opn of
 	IfBegin val -> cgenLine ("if (" ++ strVal val ++ ") {") >> incIndent
 	IfElse      -> decIndent >> cgenLine "} else {" >> incIndent
 	IfEnd       -> decIndent >> cgenLine "}"
-
-
 
 
 cgenAssign :: Opn -> CGen

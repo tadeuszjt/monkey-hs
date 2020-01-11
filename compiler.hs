@@ -10,29 +10,30 @@ import qualified AST as A
 type Blocks = [Map String (Ident, Type)]
 emptyBlocks = [Map.empty]
 
-lookupBlocks :: String -> Blocks -> Maybe (Ident, Type)
-lookupBlocks name []     = Nothing
-lookupBlocks name (b:bs) =
-	case Map.lookup name b of
-		Just (id, typ) -> Just (id, typ)
-		Nothing        -> lookupBlocks name bs
-
 
 data CmpState
 	= CmpState {
 		idCount  :: Int,
-		symTab   :: Map Ident Val,
+		symTab   :: Map Ident Func,
 		fnStack  :: [(Ident, Blocks)]
 		}
 	deriving Show
 
 emptyCmpState = CmpState {
 	idCount = 1,
-	symTab  = Map.singleton 0 (VFunc []),
+	symTab  = Map.singleton 0 (TFunc, []),
 	fnStack = [(0, emptyBlocks)]
 	}
 
 type Cmp a = StateT CmpState (Either String) a
+
+-- lookup string name in entire block stack
+lookupBlocks :: String -> Blocks -> Maybe (Ident, Type)
+lookupBlocks name []     = Nothing
+lookupBlocks name (b:bs) =
+	case Map.lookup name b of
+		Just (id, typ) -> Just (id, typ)
+		Nothing        -> lookupBlocks name bs
 
 
 uniqueId :: Cmp Ident
@@ -50,7 +51,7 @@ pushFunc = do
 	fs <- gets fnStack
 	modify $ \s -> s {
 		fnStack = (id, emptyBlocks):fs,
-		symTab = Map.insert id (VFunc []) st
+		symTab = Map.insert id (TFunc, []) st
 		}
 	return id
 
@@ -61,7 +62,7 @@ popFunc = do
 	modify $ \s -> s {fnStack = tail fs}
 
 
--- pushes a new 'block' to store names
+-- pushes a new block to store names
 pushScope :: Cmp ()
 pushScope = do
 	(id, blks):fs <- gets fnStack
@@ -72,6 +73,7 @@ popScope :: Cmp ()
 popScope = do
 	(id, blks):fs <- gets fnStack
 	modify $ \s -> s {fnStack = (id, tail blks):fs}
+
 
 scope :: Cmp a -> Cmp a
 scope cmp = do
@@ -109,8 +111,8 @@ addOpn opn = do
 	(curId, _):_ <- gets fnStack
 	st           <- gets symTab
 
-	let Just (VFunc opns) = Map.lookup curId st
-	let fn' = VFunc (opns ++ [opn])
+	let Just (typ, opns) = Map.lookup curId st
+	let fn' = (typ, opns ++ [opn])
 	let st' = Map.insert curId fn' st
 
 	modify $ \s -> s {symTab = st'} 
@@ -120,21 +122,15 @@ err :: String -> Cmp a
 err str =
 	lift (Left str)
 
+
 assert :: Bool -> String -> Cmp ()
 assert cnd str =
 	if cnd
 	then return ()
 	else err str
 
+
 -- program output
-
-data Prog
-	= Prog {
-		fns :: [(Ident, Val)]
-		}
-	deriving Show
-
-
 evalCmp :: Cmp Prog -> Either String Prog
 evalCmp cmp =
 	evalStateT cmp emptyCmpState
@@ -144,7 +140,7 @@ cmpProg :: A.Program -> Cmp Prog
 cmpProg astProg = do
 	mapM_ cmpStmt astProg
 	st <- gets symTab
-	return $ Prog (Map.toList st)
+	return (Map.toList st)
 
 
 -- compile expressions

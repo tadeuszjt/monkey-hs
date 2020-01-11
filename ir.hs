@@ -3,6 +3,8 @@ module IR where
 import qualified AST as A
 
 type Ident = Int
+type Prog = [(Ident, Func)]
+type Func = (Type, [Opn])
 
 data Type
 	= TInt
@@ -15,7 +17,6 @@ data Val
 	= VInt Int
 	| VBool Bool
 	| VString String
-	| VFunc [Opn]
 	| VIdent Ident Type
 	| VInfix A.Op Val Val Type
 	| VCall Ident
@@ -35,6 +36,5 @@ valType v = case v of
 	VInt _         -> TInt
 	VBool _        -> TBool
 	VString _      -> TString
-	VFunc _        -> TFunc
 	VIdent _ t     -> t
 	VInfix _ _ _ t -> t
