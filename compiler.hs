@@ -27,6 +27,7 @@ emptyCmpState = CmpState {
 
 type Cmp a = StateT CmpState (Either String) a
 
+
 -- lookup string name in entire block stack
 lookupBlocks :: String -> Blocks -> Maybe (Ident, Type)
 lookupBlocks name []     = Nothing
@@ -146,9 +147,9 @@ cmpProg astProg = do
 -- compile expressions
 cmpExpr :: A.Expr -> Cmp Val
 cmpExpr expr = case expr of
-	A.EInt i      -> return (VInt i)
-	A.EBool b     -> return (VBool b)
-	A.EString s   -> return (VString s)
+	A.Int i      -> return (VInt i)
+	A.Bool b     -> return (VBool b)
+	A.String s   -> return (VString s)
 	A.Ident s     -> getName s >>= \(id, typ) -> return $ VIdent id typ
 	A.Infix _ _ _ -> cmpInfix expr
 	A.Func _ _    -> cmpFuncExpr expr

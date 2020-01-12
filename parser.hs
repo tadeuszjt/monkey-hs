@@ -1,60 +1,62 @@
 module Parser where
 
+
 import Lexer
-import AST
-import Text.ParserCombinators.Parsec
+import qualified AST as S
+import Control.Monad.Identity
+--import Text.Parsec (setSourceLine, setSourceColumn)
+import Text.Parsec.Prim
+import Text.Parsec.Combinator
 import qualified Text.ParserCombinators.Parsec.Expr as Ex
 
--- Expression Parsers
-
-ident :: Parser Expr
+ident :: Parser S.Expr
 ident =
-    fmap Ident identifier
+    fmap S.Ident identifier
 
-litInt :: Parser Expr
+litInt :: Parser S.Expr
 litInt =
-    return . EInt . fromInteger =<< integer
+    return . S.Int =<< integer
 
-litBool :: Parser Expr
+litBool :: Parser S.Expr
 litBool =
-    try (reserved "true" >> return (EBool True))
-    <|> (reserved "false" >> return (EBool False))
+    try (reserved "true" >> return (S.Bool True))
+    <|> (reserved "false" >> return (S.Bool False))
 
-litString :: Parser Expr
+litString :: Parser S.Expr
 litString =
-    return . EString =<< stringLiteral
+    return . S.String =<< string
 
-litFunc :: Parser Expr
+litFunc :: Parser S.Expr
 litFunc = do
     reserved "fn"
     args <- parens $ commaSep identifier
     blck <- block
-    return $ Func args blck
+    return $ S.Func args blck
 
     
-array :: Parser Expr
+array :: Parser S.Expr
 array =
-    fmap Array $ brackets (commaSep expr)
+    fmap S.Array $ brackets (commaSep expr)
 
 
 -- recursive left grammar postfix
 recPostfix p = Ex.Postfix $ chainl1 p (return $ flip (.))
-binary name op assoc = Ex.Infix (reservedOp name >> return (Infix op)) assoc
+binary name op assoc = Ex.Infix (reservedOp name >> return (S.Infix op)) assoc
 
 table = [
-	[recPostfix (fmap (flip Call) (parens (commaSep expr))),
-     recPostfix (fmap (flip Subscript) (brackets expr))],
-    [binary "*" Times Ex.AssocLeft,
-     binary "/" Divide Ex.AssocLeft,
-     binary "%" Mod Ex.AssocLeft],
-    [binary "+" Plus Ex.AssocLeft,
-     binary "-" Minus Ex.AssocLeft],
-    [binary "<" LThan Ex.AssocLeft,
-     binary ">" GThan Ex.AssocLeft,
-     binary "==" EqEq Ex.AssocLeft,
-     binary "<=" LTEq Ex.AssocLeft,
-     binary ">=" GTEq Ex.AssocLeft],
-    [binary "||" OrOr Ex.AssocLeft]
+	[recPostfix (fmap (flip S.Call) (parens (commaSep expr))),
+     recPostfix (fmap (flip S.Subscript) (brackets expr))],
+    [binary "*" S.Times Ex.AssocLeft,
+     binary "/" S.Divide Ex.AssocLeft,
+     binary "%" S.Mod Ex.AssocLeft],
+    [binary "+" S.Plus Ex.AssocLeft,
+     binary "-" S.Minus Ex.AssocLeft],
+    [binary "<" S.LThan Ex.AssocLeft,
+     binary ">" S.GThan Ex.AssocLeft,
+     binary "==" S.EqEq Ex.AssocLeft,
+     binary "<=" S.LTEq Ex.AssocLeft,
+     binary ">=" S.GTEq Ex.AssocLeft],
+    [binary "||" S.OrOr Ex.AssocLeft]
     ]
 
 term =
@@ -66,45 +68,45 @@ term =
     <|> try array
     <|> parens expr
 
-expr :: Parser Expr
+expr :: Parser S.Expr
 expr =
     Ex.buildExpressionParser table term <?> "expression"
 
 -- Statement Parsers
 
-ret :: Parser Stmt
+ret :: Parser S.Stmt
 ret =
-    reserved "return" >> fmap Return expr
+    reserved "return" >> fmap S.Return expr
 
-assign :: Parser Stmt
+assign :: Parser S.Stmt
 assign = do
-    (Ident name) <- ident
+    (S.Ident id) <- ident
     reservedOp ":="
-    fmap (Assign name) expr
+    fmap (S.Assign id) expr
 
-set :: Parser Stmt
+set :: Parser S.Stmt
 set = do
-    (Ident name) <- ident
+    (S.Ident id) <- ident
     reservedOp "="
-    fmap (Set name) expr
+    fmap (S.Set id) expr
 
-ifStmt :: Parser Stmt
+ifStmt :: Parser S.Stmt
 ifStmt = do
     reserved "if"
     cnd <- expr
     blk <- block
     els <- optionMaybe $ reserved "else" >> (try ifStmt <|> block)
-    return $ IfStmt cnd blk els
+    return $ S.IfStmt cnd blk els
 
-while :: Parser Stmt
+while :: Parser S.Stmt
 while = do
     reserved "while"
     cnd <- expr
     blk <- block
-    return $ While cnd blk
+    return $ S.While cnd blk
     
 
-statement :: Parser Stmt
+statement :: Parser S.Stmt
 statement =
     try block <|>
     try ifStmt <|>
@@ -116,17 +118,17 @@ statement =
         semi
         return s
 
-exprStmt :: Parser Stmt
+exprStmt :: Parser S.Stmt
 exprStmt = do
     exp <- expr
     semi
-    return $ ExprStmt exp
+    return $ S.ExprStmt exp
 
-block :: Parser Stmt
+block :: Parser S.Stmt
 block =
-    fmap Block $ braces (many statement)
+    fmap S.Block $ braces (many statement)
 
-program :: Parser Program
+program :: Parser S.Program
 program = do
     s <- many statement
     eof
@@ -134,8 +136,8 @@ program = do
 
 -- Parse Function
 
-parseStr :: String -> IO Program
-parseStr str = do
+parseTokens :: [Token] -> IO S.Program
+parseTokens str = do
     return $ case parse program "" str of
         Left e -> error $ show e
         Right r -> r

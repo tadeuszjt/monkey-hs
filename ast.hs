@@ -17,9 +17,9 @@ data Op
     deriving (Show, Eq)
 
 data Expr
-    = EInt Int
-    | EBool Bool
-    | EString String
+    = Int Int
+    | Bool Bool
+    | String String
     | Func [Name] Stmt
     | Ident Name 
     | Call Expr [Expr]
