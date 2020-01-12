@@ -1,30 +1,20 @@
 module Parser where
 
-
 import Lexer
 import qualified AST as S
 import Control.Monad.Identity
---import Text.Parsec (setSourceLine, setSourceColumn)
 import Text.Parsec.Prim
 import Text.Parsec.Combinator
 import qualified Text.ParserCombinators.Parsec.Expr as Ex
 
-ident :: Parser S.Expr
-ident =
-    fmap S.Ident identifier
-
-litInt :: Parser S.Expr
-litInt =
-    return . S.Int =<< integer
+ident = fmap S.Ident identifier
+litInt = return . S.Int =<< integer
+litString = return . S.String =<< string
 
 litBool :: Parser S.Expr
 litBool =
     try (reserved "true" >> return (S.Bool True))
     <|> (reserved "false" >> return (S.Bool False))
-
-litString :: Parser S.Expr
-litString =
-    return . S.String =<< string
 
 litFunc :: Parser S.Expr
 litFunc = do
@@ -32,11 +22,8 @@ litFunc = do
     args <- parens $ commaSep identifier
     blck <- block
     return $ S.Func args blck
-
     
-array :: Parser S.Expr
-array =
-    fmap S.Array $ brackets (commaSep expr)
+array = fmap S.Array $ brackets (commaSep expr)
 
 
 -- recursive left grammar postfix
@@ -74,9 +61,7 @@ expr =
 
 -- Statement Parsers
 
-ret :: Parser S.Stmt
-ret =
-    reserved "return" >> fmap S.Return expr
+ret = reserved "return" >> fmap S.Return expr
 
 assign :: Parser S.Stmt
 assign = do
@@ -96,7 +81,7 @@ ifStmt = do
     cnd <- expr
     blk <- block
     els <- optionMaybe $ reserved "else" >> (try ifStmt <|> block)
-    return $ S.IfStmt cnd blk els
+    return $ S.If cnd blk els
 
 while :: Parser S.Stmt
 while = do
@@ -124,9 +109,7 @@ exprStmt = do
     semi
     return $ S.ExprStmt exp
 
-block :: Parser S.Stmt
-block =
-    fmap S.Block $ braces (many statement)
+block = fmap S.Block $ braces (many statement)
 
 program :: Parser S.Program
 program = do

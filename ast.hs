@@ -31,7 +31,7 @@ data Expr
 data Stmt
     = Assign Name Expr
     | Set Name Expr
-    | IfStmt Expr Stmt (Maybe Stmt)
+    | If Expr Stmt (Maybe Stmt)
     | While Expr Stmt
 	| Block [Stmt]
     | Return Expr

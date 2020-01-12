@@ -486,38 +486,38 @@ satisfy f =
 		tokEq t = if f t then Just t else Nothing
 		nextPos pos _ []     = pos
 		nextPos pos _ (t:_)  =
-			let (line, column) = (\(AlexPn _ l c) -> (l, c)) (tokPosn t)
+			let (AlexPn _ line column) = tokPosn t
 			in setSourceColumn (setSourceLine pos line) column
 
 identifier = satisfy isIdent >>= (\(Ident _ s) -> return s)
 	where
 		isIdent (Ident _ _) = True
-		isIdent _             = False
+		isIdent _           = False
 
 integer = satisfy isInt >>= (\(Int _ n) -> return n)
 	where
 		isInt (Int _ _) = True
-		isInt _           = False
+		isInt _         = False
 
-reserved s = satisfy isRes >>= (\(Reserved _ _) -> return ())
+reserved s = satisfy isRes >> return ()
 	where
 		isRes (Reserved _ s') = if s' == s then True else False
-		isRes _                 = False
+		isRes _               = False
 
-reservedOp o = satisfy isResOp >>= (\(ReservedOp _ _) -> return ())
+reservedOp o = satisfy isResOp >> return ()
 	where
 		isResOp (ReservedOp _ o') = if o' == o then True else False
-		isResOp _                   = False
+		isResOp _                 = False
 
 string = satisfy isString >>= (\(String _ s) -> return s)
 	where
 		isString (String _ _) = True
-		isString _              = False
+		isString _            = False
 
 symbol c = satisfy isSym >>= (\(Sym _ c) -> return c)
 	where
 		isSym (Sym _ c') = if c' == c then True else False 
-		isSym _            = False
+		isSym _          = False
 
 parens p   = between (symbol '(') (symbol ')') p
 braces p   = between (symbol '{') (symbol '}') p
@@ -526,7 +526,7 @@ brackets p = between (symbol '[') (symbol ']') p
 commaSep p =
 	try     (do {first <- p; rest <- many (symbol ',' >> p); return (first:rest)})
 	<|> try (fmap (:[]) p)
-	<|> try (return [])
+	<|>     (return [])
 
 semi = symbol ';'
 

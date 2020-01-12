@@ -147,9 +147,9 @@ cmpProg astProg = do
 -- compile expressions
 cmpExpr :: A.Expr -> Cmp Val
 cmpExpr expr = case expr of
-	A.Int i      -> return (VInt i)
-	A.Bool b     -> return (VBool b)
-	A.String s   -> return (VString s)
+	A.Int i       -> return (VInt i)
+	A.Bool b      -> return (VBool b)
+	A.String s    -> return (VString s)
 	A.Ident s     -> getName s >>= \(id, typ) -> return $ VIdent id typ
 	A.Infix _ _ _ -> cmpInfix expr
 	A.Func _ _    -> cmpFuncExpr expr
@@ -200,11 +200,11 @@ cmpInfix (A.Infix op e1 e2) = do
 -- compile statements
 cmpStmt :: A.Stmt -> Cmp ()
 cmpStmt stmt = case stmt of
-	A.Assign _ _   -> cmpAssign stmt
-	A.Set _ _      -> cmpSet stmt
-	A.ExprStmt _   -> cmpExprStmt stmt
-	A.While _ _    -> cmpWhile stmt
-	A.IfStmt _ _ _ -> cmpIf stmt
+	A.Assign _ _ -> cmpAssign stmt
+	A.Set _ _    -> cmpSet stmt
+	A.ExprStmt _ -> cmpExprStmt stmt
+	A.While _ _  -> cmpWhile stmt
+	A.If _ _ _   -> cmpIf stmt
 	_ -> err $ "statement unhandled: " ++ show stmt 
 
 
@@ -257,7 +257,7 @@ cmpWhile (A.While cnd (A.Block stmts)) = do
 
 
 cmpIf :: A.Stmt -> Cmp ()
-cmpIf (A.IfStmt cnd (A.Block stmts) els) = do
+cmpIf (A.If cnd (A.Block stmts) els) = do
 	cndVal <- cmpExpr cnd
 	assert (valType cndVal == TBool) $ "if cnd not bool: " ++ show cnd
 
