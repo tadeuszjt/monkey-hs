@@ -32,10 +32,11 @@ $white  = [\ \t\n]
 $digit  = 0-9
 $alpha  = [a-zA-Z]
 $symbol = [\{\}\(\)\[\]\,\;]
+$opSym  = [\+\-\*\/\%\<\>\=]
 
 @reserved   = fn | while | if | else | true | false | return
-@reservedOp = "==" | ":=" | "<=" | ">=" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "=" | "||"
-@string     = $alpha | $digit | " "
+@reservedOp = $opSym | "==" | ":=" | "<=" | ">=" | "||"
+@string     = $alpha | $digit | ' '
 
 tokens :-
 

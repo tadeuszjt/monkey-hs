@@ -13,8 +13,7 @@ main :: IO ()
 main = do
     content <- getContents
     let tokens = L.alexScanTokens content
-    prog <- P.parseTokens tokens
+    let prog = P.parseTokens tokens
     case C.evalCmp (C.cmpProg prog) of
-        Left str -> print ("error: " ++ str)
-        Right p  -> execStateT (cgenProg p) 0 >> return ()
-	
+        Left e -> print e
+        Right p -> evalStateT (cgenProg p) 0
