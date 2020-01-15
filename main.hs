@@ -14,6 +14,15 @@ main = do
     content <- getContents
     let tokens = L.alexScanTokens content
     let prog = P.parseTokens tokens
-    case C.evalCmp (C.cmpProg prog) of
-        Left e -> print e
+    case C.compile prog of
+        Left e -> printError e content
         Right p -> evalStateT (cgenProg p) 0
+	where
+		printError (L.AlexPn offset line col, str) contents = do
+			let lns = lines contents
+			putStrLn ""
+			putStrLn $ "error (line: " ++ show line ++ ", col: " ++ show col ++ "): " ++ str
+			if line > 1 then putStrLn ('\t' : (lns !! (line - 2))) else putStrLn ""
+			putStrLn $ '\t' : (lns !! (line - 1))
+			putStrLn $ '\t' : (replicate (col - 1) '-' ++ "^")
+			putStrLn ""

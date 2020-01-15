@@ -113,9 +113,9 @@ cgenOpn opn = case opn of
 
 
 cgenAssign :: Opn -> CGen
-cgenAssign (Assign id val) = cgenStmt $ case valType val of
-	TFunc -> "void (*" ++ strId id ++ ")() = &" ++ strVal val
-	_     -> strType (valType val) ++ " " ++ strId id ++ " = " ++ strVal val
+cgenAssign (Assign id val) = cgenStmt $ case typeOf val of
+	TFunc _ _ -> "void (*" ++ strId id ++ ")() = &" ++ strVal val
+	_         -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
 
 
 cgenPrint :: Opn -> CGen
@@ -125,11 +125,11 @@ cgenPrint (Print vals) =
 	where
 		fmt [VBool True] = ("%s", "\"true\"")
 		fmt [VBool False] = ("%s", "\"false\"")
-		fmt [val] = case valType val of
-			TInt    -> ("%d", strVal val)
-			TBool   -> ("%s", strVal val ++ " ? \"true\" : \"false\"")
-			TString -> ("%s", strVal val)
-			TFunc   -> ("%s", "\"func\"") 
+		fmt [val] = case typeOf val of
+			TInt      -> ("%d", strVal val)
+			TBool     -> ("%s", strVal val ++ " ? \"true\" : \"false\"")
+			TString   -> ("%s", strVal val)
+			TFunc _ _ -> ("%s", "\"func\"") 
 		fmt (v:vs) =
 			let (f, a) = fmt [v]; (fs, as) = fmt vs
 			in (f ++ ", " ++ fs, a ++ ", " ++ as)

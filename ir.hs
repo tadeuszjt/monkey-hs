@@ -10,7 +10,8 @@ data Type
 	= TInt
 	| TBool
 	| TString
-	| TFunc
+	| TFunc [Type] Type
+	| TAny
 	deriving (Show, Eq)
 
 data Val
@@ -19,7 +20,7 @@ data Val
 	| VString String
 	| VIdent Ident Type
 	| VInfix A.Op Val Val Type
-	| VCall Ident
+	| VCall Ident [Val]
 	deriving Show
 	
 data Opn
@@ -31,8 +32,8 @@ data Opn
 	| IfBegin Val | IfElse    | IfEnd
 	deriving Show
 
-valType :: Val -> Type
-valType v = case v of
+typeOf :: Val -> Type
+typeOf v = case v of
 	VInt _         -> TInt
 	VBool _        -> TBool
 	VString _      -> TString
