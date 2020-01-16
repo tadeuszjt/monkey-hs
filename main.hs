@@ -8,7 +8,7 @@ import qualified Evaluate as E
 import qualified AST as S
 import qualified Compiler as C
 import qualified Lexer as L
-import CGen
+import qualified CGen as G
 
 main :: IO ()
 main = do
@@ -19,15 +19,17 @@ main = do
     let prog = P.parseTokens tokens
     case C.compile prog of
         Left e -> printError e content fname
-        Right p -> evalStateT (cgenProg p) 0
+        Right p -> evalStateT (G.prog p) 0
 	where
 		printError (L.AlexPn offset line col, str) contents fname = do
 			let lns = lines contents
+			let ln = lns !! (line - 1)
+			let ntabs = length (takeWhile (=='\t') ln)
 			mapM_ (hPutStrLn stderr) [
 				"",
 				fname ++ ":" ++ show line ++ ":" ++ show col ++ ": " ++ str,
 				if line > 1 then '\t' : (lns !! (line - 2)) else "",
-				'\t' : (lns !! (line - 1)),
-				'\t' : (replicate (col - 1) '-' ++ "^"),
+				'\t' : ln,
+				'\t' : replicate ntabs '\t' ++ (replicate (col - 1 - ntabs*4) '-' ++ "^"),
 				""
 				]

@@ -1,11 +1,10 @@
 module CGen where
 
 import Control.Monad.State
-
-import Compiler
-import IR
-import qualified AST as A
 import Data.List
+
+import qualified AST as A
+import IR
 
 
 -- indentation state
@@ -59,21 +58,21 @@ strVal val = case val of
 
 
 -- basic generation
-cgenLine :: String -> CGen
-cgenLine str = do
+line :: String -> CGen
+line str = do
 	indent <- get
 	liftIO $ putStrLn (replicate indent '\t' ++ str)
 	
 
-cgenStmt :: String -> CGen
-cgenStmt str =
-	cgenLine (str ++ ";")
+stmt :: String -> CGen
+stmt str =
+	line (str ++ ";")
 
 
 -- generate program
-cgenProg :: Prog -> CGen
-cgenProg prog = do
-	mapM_ cgenLine [
+prog :: Prog -> CGen
+prog prg = do
+	mapM_ line [
 		"#include <stdio.h>",
 		"#include <stdbool.h>",
 		"",
@@ -93,46 +92,46 @@ cgenProg prog = do
 		"} Any;"
 		]
 
-	mapM_ (\(id, fn) -> cgenFunc id fn) $ reverse prog
+	mapM_ (\(id, fn) -> func id fn) $ reverse prg
 
-	cgenLine ""
-	cgenLine "int main() {"
+	line ""
+	line "int main() {"
 	incIndent
-	cgenStmt "v0()"
-	cgenStmt "return 0"
+	stmt "v0()"
+	stmt "return 0"
 	decIndent
-	cgenLine "}"
+	line "}"
 
 
-cgenFunc :: Ident -> Func -> CGen
-cgenFunc id (TFunc targs retty, opns) = do
+func :: Ident -> Func -> CGen
+func id (TFunc targs retty, opns) = do
 	let strargs = intercalate ", " $ zipWith ($) (map strArg targs) [0..]
-	cgenLine ""
-	cgenLine $ strType retty ++ " " ++ strId id ++ "(" ++ strargs ++ ") {"
+	line ""
+	line $ strType retty ++ " " ++ strId id ++ "(" ++ strargs ++ ") {"
 	incIndent
-	mapM_ cgenOpn opns
+	mapM_ genOpn opns
 	decIndent
-	cgenLine "}"
+	line "}"
 	where
 		strArg typ num = strType typ ++ " a" ++ show num
 
 
-cgenOpn :: Opn -> CGen
-cgenOpn opn = case opn of
-	Assign _ _  -> cgenAssign opn
-	Set id val  -> cgenStmt $ strId id ++ " = " ++ strVal val
-	Print _     -> cgenPrint opn
-	Call id     -> cgenStmt $ strId id ++ "()"
-	LoopBegin   -> cgenLine "while (true) {" >> incIndent
-	LoopBreak   -> cgenStmt "break"
-	LoopEnd     -> decIndent >> cgenLine "}"
-	IfBegin val -> cgenLine ("if (" ++ strVal val ++ ") {") >> incIndent
-	IfElse      -> decIndent >> cgenLine "} else {" >> incIndent
-	IfEnd       -> decIndent >> cgenLine "}"
+genOpn :: Opn -> CGen
+genOpn opn = case opn of
+	Assign _ _  -> assign opn
+	Set id val  -> stmt $ strId id ++ " = " ++ strVal val
+	Print _     -> genPrint opn
+	Call id     -> stmt $ strId id ++ "()"
+	LoopBegin   -> line "while (true) {" >> incIndent
+	LoopBreak   -> stmt "break"
+	LoopEnd     -> decIndent >> line "}"
+	IfBegin val -> line ("if (" ++ strVal val ++ ") {") >> incIndent
+	IfElse      -> decIndent >> line "} else {" >> incIndent
+	IfEnd       -> decIndent >> line "}"
 
 
-cgenAssign :: Opn -> CGen
-cgenAssign (Assign id val) = cgenStmt $ case typeOf val of
+assign :: Opn -> CGen
+assign (Assign id val) = stmt $ case typeOf val of
 	TFunc targs retty -> strTFunc targs retty id ++ " = &" ++ strVal val
 	_                 -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
 	where
@@ -145,11 +144,10 @@ cgenAssign (Assign id val) = cgenStmt $ case typeOf val of
 			++ ")"
 
 
-
-cgenPrint :: Opn -> CGen
-cgenPrint (Print vals) =
+genPrint :: Opn -> CGen
+genPrint (Print vals) =
 	let (fmts, args) = fmt vals
-	in cgenStmt $ "printf(\"" ++ fmts ++ "\\n\", " ++ args ++ ")"
+	in stmt $ "printf(\"" ++ fmts ++ "\\n\", " ++ args ++ ")"
 	where
 		fmt [VBool True] = ("%s", "\"true\"")
 		fmt [VBool False] = ("%s", "\"false\"")

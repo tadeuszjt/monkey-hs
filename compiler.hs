@@ -166,6 +166,7 @@ stmt s = case s of
 	S.While _ _ _   -> while s
 	S.Block _ s     -> pushScope >> mapM_ stmt s >> popScope
 	S.ExprStmt e    -> expr e >> return ()
+	S.Return _ e    -> expr e >>= \val -> emit $ Set 0 val
 
 
 assign :: S.Stmt -> Cmp ()
@@ -192,6 +193,7 @@ func (S.Func pos args (S.Block _ stmts)) = do
 	let ftype = TFunc targs retty
 
 	fid <- createFunc ftype
+	mapM_ stmt stmts
 	finishFunc 
 
 	return $ VIdent fid ftype
