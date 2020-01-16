@@ -1,3 +1,6 @@
 let x = 1;
 let y = 2 + 3 * x;
-y = true;
+
+let f = fn(x) {
+	return x * x;
+};

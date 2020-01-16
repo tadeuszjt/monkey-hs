@@ -86,7 +86,7 @@ uniqueId = do
 	return count
 
 
-createFunc :: Type -> Cmp ()
+createFunc :: Type -> Cmp Ident
 createFunc fnType@(TFunc _ _) = do
 	id <- uniqueId
 	fns <- gets funcs
@@ -95,6 +95,7 @@ createFunc fnType@(TFunc _ _) = do
 		funcs   = Map.insert id (fnType, []) fns,
 		fnStack = (id, initSymTab):stk
 		}
+	return id
 
 
 finishFunc :: Cmp ()
@@ -181,6 +182,19 @@ expr exp = case exp of
 	S.String _ s    -> return (VString s)
 	S.Ident _ s     -> getName exp >>= \(id, typ) -> return (VIdent id typ)
 	S.Infix _ _ _ _ -> infixx exp
+	S.Func _ _ _    -> func exp
+
+
+func :: S.Expr -> Cmp Val
+func (S.Func pos args (S.Block _ stmts)) = do
+	let targs = replicate (length args) TAny
+	let retty = TAny
+	let ftype = TFunc targs retty
+
+	fid <- createFunc ftype
+	finishFunc 
+
+	return $ VIdent fid ftype
 
 	
 infixx :: S.Expr -> Cmp Val

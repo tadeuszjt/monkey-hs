@@ -32,6 +32,7 @@ strType typ = case typ of
 	TInt    -> "int"
 	TBool   -> "bool"
 	TString -> "char*"
+	TAny    -> "Any"
 
 
 strOp :: A.Op -> String
@@ -74,7 +75,22 @@ cgenProg :: Prog -> CGen
 cgenProg prog = do
 	mapM_ cgenLine [
 		"#include <stdio.h>",
-		"#include <stdbool.h>"
+		"#include <stdbool.h>",
+		"",
+		"typedef enum {",
+		"\tTInt,",
+		"\tTFloat,",
+		"\tTBool,",
+		"} Type;",
+		"",
+		"typedef struct {",
+		"\tType type;",
+		"\tunion {",
+		"\t\tint vInt;",
+		"\t\tfloat vFloat;",
+		"\t\tbool vBool;",
+		"\t};",
+		"} Any;"
 		]
 
 	mapM_ (\(id, fn) -> cgenFunc id fn) $ reverse prog
@@ -89,13 +105,16 @@ cgenProg prog = do
 
 
 cgenFunc :: Ident -> Func -> CGen
-cgenFunc id (typ, opns) = do
+cgenFunc id (TFunc targs retty, opns) = do
+	let strargs = intercalate ", " $ zipWith ($) (map strArg targs) [0..]
 	cgenLine ""
-	cgenLine $ "void " ++ strId id ++ "() {"
+	cgenLine $ strType retty ++ " " ++ strId id ++ "(" ++ strargs ++ ") {"
 	incIndent
 	mapM_ cgenOpn opns
 	decIndent
 	cgenLine "}"
+	where
+		strArg typ num = strType typ ++ " a" ++ show num
 
 
 cgenOpn :: Opn -> CGen
@@ -114,8 +133,17 @@ cgenOpn opn = case opn of
 
 cgenAssign :: Opn -> CGen
 cgenAssign (Assign id val) = cgenStmt $ case typeOf val of
-	TFunc _ _ -> "void (*" ++ strId id ++ ")() = &" ++ strVal val
-	_         -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
+	TFunc targs retty -> strTFunc targs retty id ++ " = &" ++ strVal val
+	_                 -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
+	where
+		strTFunc targs retty id =
+			strType retty
+			++ " (*"
+			++ strId id
+			++ ")("
+			++ intercalate ", " (map strType targs)
+			++ ")"
+
 
 
 cgenPrint :: Opn -> CGen
