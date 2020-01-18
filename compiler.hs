@@ -186,7 +186,16 @@ stmt s = case s of
 	S.While _ _ _   -> while s
 	S.Block _ s     -> pushScope >> mapM_ stmt s >> popScope
 	S.ExprStmt e    -> exprStmt s
-	S.Return _ e    -> expr e >>= \val -> emit (Return val)
+	S.Return _ _    -> returnStmt s
+
+
+returnStmt :: S.Stmt -> Cmp ()
+returnStmt (S.Return pos exp) = do
+	val <- expr exp
+	case typeOf val of
+		TStaticArray _ -> err pos "can't return arrays"
+		_              -> return ()
+	emit (Return val)
 
 
 assign :: S.Stmt -> Cmp ()
@@ -207,7 +216,7 @@ expr exp = case exp of
 	S.Call _ _ _      -> call exp
 	S.Array _ _       -> staticArray exp
 	S.Subscript _ _ _ -> subscript exp
-	_                 -> error $ "expr unhandled: " ++ (take 60 $ show exp)
+	_                 -> error $ "expr unhandled: " ++ (take 60 $ show exp) ++ "..."
 
 
 subscript :: S.Expr -> Cmp Val
@@ -219,7 +228,6 @@ subscript (S.Subscript pos arr ind) = do
 
 	indVal <- expr ind
 	assert (typeOf indVal == TInt) pos "subscript type ins't int"
-
 	return $ VSubscript arrVal indVal
 
 
@@ -293,23 +301,35 @@ infixx (S.Infix pos op e1 e2) = do
 			((TAny,  TInt,  S.Plus),   TInt),
 			((TInt,  TAny,  S.Plus),   TInt),
 			((TAny,  TAny,  S.Plus),   TInt),
+
 			((TInt,  TInt,  S.Minus),  TInt),
 			((TAny,  TInt,  S.Minus),  TInt),
 			((TInt,  TAny,  S.Minus),  TInt),
 			((TAny,  TAny,  S.Minus),  TInt),
+
 			((TInt,  TInt,  S.Times),  TInt),
 			((TAny,  TInt,  S.Times),  TInt),
 			((TInt,  TAny,  S.Times),  TInt),
 			((TAny,  TAny,  S.Times),  TInt),
+
 			((TInt,  TInt,  S.Divide), TInt),
 			((TInt,  TInt,  S.Mod),    TInt),
+
 			((TInt,  TInt,  S.EqEq),   TBool),
+			((TAny,  TInt,  S.EqEq),   TBool),
+			((TInt,  TAny,  S.EqEq),   TBool),
+			((TAny,  TAny,  S.EqEq),   TBool),
+
 			((TInt,  TInt,  S.LThan),  TBool),
 			((TAny,  TInt,  S.LThan),  TBool),
 			((TInt,  TAny,  S.LThan),  TBool),
+			((TAny,  TAny,  S.LThan),  TBool),
+
 			((TInt,  TInt,  S.GThan),  TBool),
 			((TAny,  TInt,  S.GThan),  TBool),
 			((TInt,  TAny,  S.GThan),  TBool),
+			((TAny,  TAny,  S.GThan),  TBool),
+
 			((TBool, TBool, S.OrOr),   TBool)
 			]
 
@@ -336,7 +356,7 @@ set (S.Set pos name exp) = do
 exprStmt :: S.Stmt -> Cmp ()
 exprStmt (S.ExprStmt exp) = case exp of
 	S.Call _ (S.Ident _ "print") args -> emit . Print =<< mapM expr args
-	_ -> error $ "expr stmt unhandled: " ++ show exp
+	_                                 -> emit . Expr =<< expr exp
 
 
 while :: S.Stmt -> Cmp ()

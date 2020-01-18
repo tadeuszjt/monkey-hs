@@ -3,6 +3,7 @@ module AST where
 import qualified Lexer as L
 
 type Name = String
+type Posn = L.AlexPosn
 
 data Op
     = Times
@@ -19,41 +20,44 @@ data Op
     deriving (Show, Eq)
 
 data Expr
-    = Int       L.AlexPosn Int
-    | Bool      L.AlexPosn Bool
-    | String    L.AlexPosn String
-    | Func      L.AlexPosn [Name] Stmt
-    | Ident     L.AlexPosn Name 
-    | Call      L.AlexPosn Expr [Expr]
-    | Infix     L.AlexPosn Op Expr Expr
-    | Array     L.AlexPosn [Expr]
-    | Subscript L.AlexPosn Expr Expr
+    = Int       Posn Int
+    | Bool      Posn Bool
+    | String    Posn String
+    | Ident     Posn Name 
+    | Func      Posn [Name] Stmt
+    | Call      Posn Expr   [Expr]
+    | Infix     Posn Op     Expr   Expr
+    | Subscript Posn Expr   Expr
+    | Array     Posn [Expr]
     deriving (Show, Eq)
 
 data Stmt
-    = Assign    L.AlexPosn Name Expr
-    | Set       L.AlexPosn Name Expr
-    | If        L.AlexPosn Expr Stmt (Maybe Stmt)
-    | While     L.AlexPosn Expr Stmt
-	| Block     L.AlexPosn [Stmt]
-	| BlockExpr L.AlexPosn Expr
-    | Return    L.AlexPosn Expr
+    = Assign    Posn Name   Expr
+    | Set       Posn Name   Expr
+    | If        Posn Expr   Stmt (Maybe Stmt)
+    | While     Posn Expr   Stmt
+	| Block     Posn [Stmt]
+	| BlockExpr Posn Expr
+    | Return    Posn Expr
     | ExprStmt  Expr
     deriving (Show, Eq)
 
 type Program = [Stmt]
 
-exprPosn :: Expr -> L.AlexPosn
+
+exprPosn :: Expr -> Posn
 exprPosn exp = case exp of
 	Int p _         -> p
+	Bool p _        -> p
 	String p _      -> p
 	Func p _ _      -> p
 	Ident p _       -> p
 	Call p _ _      -> p
 	Infix p _ _ _   -> p
+	Array p _       -> p
 	Subscript p _ _ -> p
 
-stmtPosn :: Stmt -> L.AlexPosn
+stmtPosn :: Stmt -> Posn
 stmtPosn stmt = case stmt of
 	Assign p _ _  -> p
 	Set p _ _     -> p

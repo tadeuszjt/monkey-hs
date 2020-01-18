@@ -37,6 +37,7 @@ data Opn
 	= Assign Ident Val
 	| Set Ident Val
 	| Print [Val]
+	| Expr Val
 	| LoopBegin   | LoopBreak | LoopEnd
 	| IfBegin Val | IfElse    | IfEnd
 	| Return Val

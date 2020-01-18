@@ -61,7 +61,7 @@ strType typ = case typ of
 	TString   -> "char*"
 	TAny      -> "Any"
 	TFunc _ _ -> "void*"
-	TStaticArray t -> strType t ++ "[]"
+	TStaticArray t -> strType t ++ "*"
 
 
 strOp :: A.Op -> String
@@ -115,11 +115,12 @@ strStaticArray (VStaticArray vals typ) =
 	else "{" ++ commaSep (map strVal vals) ++ "}"
 	
 strInfix :: Val -> String
-strInfix val@(VInfix op v1 v2 typ) = intercalate " " $ case (op, typeOf v1, typeOf v2) of
-	(_, TInt, TInt) -> [strVal v1, strOp op, strVal v2]
-	(_, TAny, TInt) -> [anyTo TInt v1, strOp op, strVal v2]
-	(_, TInt, TAny) -> [strVal v1, strOp op, anyTo TInt v2]
-	(_, TAny, TAny) -> [anyTo TInt v1, strOp op, anyTo TInt v2]
+strInfix (VInfix op v1 v2 typ) = intercalate " " $ case (typeOf v1, typeOf v2) of
+	(TAny, TAny) -> [anyTo TInt v1, strOp op, anyTo TInt v2]
+	(TAny, _)    -> [anyTo TInt v1, strOp op, strVal v2]
+	(_, TAny)    -> [strVal v1, strOp op, anyTo TInt v2]
+	(_, _)       -> [strVal v1, strOp op, strVal v2]
+
 			
 -- basic generation
 line :: String -> Gen ()
@@ -201,6 +202,7 @@ genOpn opn = case opn of
 	IfBegin val -> line ("if (" ++ anyTo TBool val ++ ") {") >> incIndent
 	IfElse      -> decIndent >> line "} else {" >> incIndent
 	IfEnd       -> decIndent >> line "}"
+	Expr val    -> stmt $ strVal val
 
 
 assign :: Opn -> Gen ()
