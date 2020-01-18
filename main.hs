@@ -19,7 +19,7 @@ main = do
     let prog = P.parseTokens tokens
     case C.compile prog of
         Left e -> printError e content fname
-        Right p -> evalStateT (G.prog p) 0
+        Right p -> evalStateT (G.prog p) G.initGenState
 	where
 		printError (L.AlexPn offset line col, str) contents fname = do
 			let lns = lines contents

@@ -2,6 +2,7 @@ module Compiler where
 
 import Control.Monad.State
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Data.List as List
 import IR
 import qualified AST as S
@@ -86,23 +87,29 @@ uniqueId = do
 	return count
 
 
-createFunc :: Type -> Cmp Index
-createFunc fnType@(TFunc targs retty) = do
+createFunc :: [Type] -> Cmp Index
+createFunc targs = do
 	-- add func to stack
 	id <- uniqueId
 	fns <- gets funcs
 	stk <- gets fnStack
 	modify $ \s -> s {
-		funcs   = Map.insert id (fnType, []) fns,
+		funcs   = Map.insert id (TFunc targs TAny, []) fns, -- any is placeholder
 		fnStack = (id, initSymTab):stk
 		}
 	return id
 
 
-finishFunc :: Cmp ()
-finishFunc = do
-	_:rest <- gets fnStack
-	modify $ \s -> s { fnStack = rest }
+finishFunc :: Type -> Cmp ()
+finishFunc retty = do
+	(fid, _):rest <- gets fnStack
+	fns <- gets funcs
+	let Just (TFunc targs _, opns) = Map.lookup fid fns
+	let fns' = Map.insert fid (TFunc targs retty, opns) fns
+	modify $ \s -> s {
+		fnStack = rest,
+		funcs = fns'
+		}
 
 
 pushScope :: Cmp ()
@@ -179,7 +186,7 @@ stmt s = case s of
 	S.While _ _ _   -> while s
 	S.Block _ s     -> pushScope >> mapM_ stmt s >> popScope
 	S.ExprStmt e    -> exprStmt s
-	S.Return _ e    -> expr e >>= \val -> emit $ Set Ret val
+	S.Return _ e    -> expr e >>= \val -> emit (Return val)
 
 
 assign :: S.Stmt -> Cmp ()
@@ -210,23 +217,51 @@ call (S.Call pos nameExpr argExprs) = do
 
 	assert (length targs == length argExprs) pos "incorrect number of args"
 	argVals <- mapM expr argExprs
-	return $ VCall (Var id) argVals TAny
+	return $ VCall (Var id) argVals retty
 
 
 func :: S.Expr -> Cmp Val
 func (S.Func pos args (S.Block _ stmts)) = do
 	let targs = replicate (length args) TAny
-	let retty = TAny
-	let ftype = TFunc targs retty
 
-	fid <- createFunc ftype
+	fid <- createFunc targs
 	mapM_ (\((name, typ), ind) -> declareArg name typ ind) (zip (zip args targs) [0..])
-	-- add args ?
 
 	mapM_ stmt stmts
-	finishFunc 
 
-	return $ VIdent (Var fid) ftype
+	-- look at returns
+	fns <- gets funcs
+	let Just (t, opns) = Map.lookup fid fns
+	let retTypeSet = Set.fromList $
+		[ let (Return val) = opn in typeOf val
+		| opn <- opns
+		, isReturn opn
+		]
+
+	retty <- case (length $ Set.toList retTypeSet) of
+		0 -> err pos "no return statement"
+		1 -> return $ Set.elemAt 0 retTypeSet
+		_ -> return TAny
+
+
+	finishFunc retty
+
+	return $ VIdent (Var fid) (TFunc targs retty)
+	where
+		isReturn (Return _) = True
+		isReturn _          = False
+
+
+
+--emit :: Opn -> Cmp ()
+--emit opn = do
+--	(fid, _):_ <- gets fnStack
+--	fns        <- gets funcs
+--	let Just (t, opns) = Map.lookup fid fns
+--	let f' = (t, opns ++ [opn])
+--	modify $ \s -> s { funcs = Map.insert fid f' fns }
+
+
 
 	
 infixx :: S.Expr -> Cmp Val

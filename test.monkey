@@ -1,4 +1,4 @@
-let x = 1;
+let x = 2;
 let y = 2 + 3 * x;
 
 let f = fn(x) {

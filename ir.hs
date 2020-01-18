@@ -19,7 +19,7 @@ data Type
 	| TString
 	| TFunc [Type] Type
 	| TAny
-	deriving (Show, Eq)
+	deriving (Show, Eq, Ord)
 
 data Val
 	= VInt Int
@@ -36,6 +36,7 @@ data Opn
 	| Print [Val]
 	| LoopBegin   | LoopBreak | LoopEnd
 	| IfBegin Val | IfElse    | IfEnd
+	| Return Val
 	deriving Show
 
 typeOf :: Val -> Type

@@ -7,16 +7,41 @@ import qualified AST as A
 import IR
 
 
-type GenState = Int
-type Gen = StateT GenState IO ()
+data GenState
+	= GenState {
+		indent :: Int,
+		retty  :: Type
+	}
+
+initGenState = GenState {
+	indent = 0,
+	retty = TInt
+	}
+
+type Gen a = StateT GenState IO a
 
 
-incIndent :: Gen
-incIndent = modify (+1)
+incIndent :: Gen ()
+incIndent = do
+	ind <- gets indent
+	modify $ \s -> s { indent = ind + 1 }
 
 
-decIndent :: Gen
-decIndent = modify (+(-1))
+decIndent :: Gen ()
+decIndent = do
+	ind <- gets indent
+	modify $ \s -> s { indent = ind - 1 }
+
+
+getRetty :: Gen Type
+getRetty = do
+	r <- gets retty
+	return r
+
+
+setRetty :: Type -> Gen ()
+setRetty typ =
+	modify $ \s -> s { retty = typ }
 
 
 commaSep = intercalate ", "
@@ -82,19 +107,19 @@ strVal val = case val of
 
 			
 -- basic generation
-line :: String -> Gen
+line :: String -> Gen ()
 line str = do
-	indent <- get
+	indent <- gets indent
 	liftIO $ putStrLn (replicate indent '\t' ++ str)
 	
 
-stmt :: String -> Gen
+stmt :: String -> Gen ()
 stmt str =
 	line (str ++ ";")
 
 
 -- generate program
-prog :: Prog -> Gen
+prog :: Prog -> Gen ()
 prog prg = do
 	mapM_ line [
 		"#include <stdio.h>",
@@ -128,6 +153,13 @@ prog prg = do
 		"\treturn any;",
 		"}",
 		"",
+		"Any boolToAny(bool b) {",
+		"\tAny any;",
+		"\tany.type = TBool;",
+		"\tany.Bool = b;",
+		"\treturn any;",
+		"}",
+		"",
 		"void printAny(Any any) {",
 		"\tswitch (any.type) {",
 		"\tcase TInt:",
@@ -148,8 +180,9 @@ prog prg = do
 	line "}"
 
 
-func :: Index -> Func -> Gen
+func :: Index -> Func -> Gen ()
 func id (TFunc targs retty, opns) = do
+	setRetty retty
 	let strargs = intercalate ", " $ zipWith ($) (map strArg targs) [0..]
 	line ""
 	line $ strType retty ++ " " ++ strId (Var id) ++ "(" ++ strargs ++ ") {"
@@ -163,9 +196,12 @@ func id (TFunc targs retty, opns) = do
 		strArg typ num = strType typ ++ " a" ++ show num
 
 
-genOpn :: Opn -> Gen
+genOpn :: Opn -> Gen ()
 genOpn opn = case opn of
 	Assign _ _  -> assign opn
+	Return val  -> getRetty >>= \typ -> case typ of
+		TAny -> stmt $ "return " ++ toAny val
+		_    -> stmt $ "return " ++ strVal val
 	Set Ret val -> stmt $ strId Ret ++ " = " ++ toAny val
 	Set id val  -> stmt $ strId id ++ " = " ++ strVal val
 	Print _     -> genPrint opn
@@ -177,7 +213,7 @@ genOpn opn = case opn of
 	IfEnd       -> decIndent >> line "}"
 
 
-assign :: Opn -> Gen
+assign :: Opn -> Gen ()
 assign (Assign id val) = stmt $ case typeOf val of
 	TFunc targs retty -> strTFunc targs retty id ++ " = &" ++ strVal val
 	_                 -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
@@ -191,7 +227,7 @@ assign (Assign id val) = stmt $ case typeOf val of
 			++ ")"
 
 
-genPrint :: Opn -> Gen
+genPrint :: Opn -> Gen ()
 genPrint (Print vals) =
 	let (fmts, args) = fmt vals
 	in stmt $ "printf(\"" ++ fmts ++ "\\n\", " ++ args ++ ")"
