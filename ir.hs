@@ -2,8 +2,15 @@ module IR where
 
 import qualified AST as A
 
-type Ident = Int
-type Prog = [(Ident, Func)]
+type Index = Int
+
+data Ident
+	= Var Index
+	| Arg Index
+	| Ret
+	deriving Show
+
+type Prog = [(Index, Func)]
 type Func = (Type, [Opn])
 
 data Type
@@ -20,14 +27,13 @@ data Val
 	| VString String
 	| VIdent Ident Type
 	| VInfix A.Op Val Val Type
-	| VCall Ident [Val]
+	| VCall Ident [Val] Type
 	deriving Show
 	
 data Opn
 	= Assign Ident Val
 	| Set Ident Val
 	| Print [Val]
-	| Call Ident
 	| LoopBegin   | LoopBreak | LoopEnd
 	| IfBegin Val | IfElse    | IfEnd
 	deriving Show
@@ -39,3 +45,4 @@ typeOf v = case v of
 	VString _      -> TString
 	VIdent _ t     -> t
 	VInfix _ _ _ t -> t
+	VCall _ _ t    -> t

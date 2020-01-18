@@ -1,7 +1,7 @@
 module Compiler where
 
 import Control.Monad.State
-import Data.Map as Map
+import qualified Data.Map as Map
 import Data.List as List
 import IR
 import qualified AST as S
@@ -9,7 +9,7 @@ import qualified Lexer as L
 
 
 --symbol table is a stack of maps representing scope
-type SymTab = [Map S.Name (Ident, Type)]
+type SymTab = [Map.Map S.Name (Ident, Type)]
 
 initSymTab = [Map.empty]
 
@@ -36,8 +36,8 @@ popSymTab st =
 data CmpState
 	= CmpState {
 		idCount  :: Int,                -- counts identifiers for unique function
-		funcs    :: Map Ident Func, -- the main map of functions
-		fnStack  :: [(Ident, SymTab)] -- stack shows current compiling function and symtab
+		funcs    :: Map.Map Index Func, -- the main map of functions
+		fnStack  :: [(Index, SymTab)] -- stack shows current compiling function and symtab
 		}
 	deriving Show
 
@@ -79,15 +79,16 @@ assert b pos str =
 	else err pos str
 
 
-uniqueId :: Cmp Ident
+uniqueId :: Cmp Index
 uniqueId = do
 	count <- gets idCount
 	modify $ \s -> s {idCount = count + 1}
 	return count
 
 
-createFunc :: Type -> Cmp Ident
-createFunc fnType@(TFunc _ _) = do
+createFunc :: Type -> Cmp Index
+createFunc fnType@(TFunc targs retty) = do
+	-- add func to stack
 	id <- uniqueId
 	fns <- gets funcs
 	stk <- gets fnStack
@@ -153,9 +154,21 @@ declare name typ = do
 		Just _  -> emptyErr
 		Nothing -> return ()
 	id <- uniqueId
-	let st' = insertSymTab name (id, typ) st
+	let st' = insertSymTab name (Var id, typ) st
 	modify $ \s -> s { fnStack = (fid, st'):fs }
-	return id
+	return (Var id)
+
+
+-- assigns name to an arg in symbol table
+declareArg :: S.Name -> Type -> Index -> Cmp Ident
+declareArg name typ ind = do
+	(fid, st):fs <- gets fnStack
+	case lookupSymTab name [head st] of
+		Just _  -> emptyErr
+		Nothing -> return ()
+	let st' = insertSymTab name (Arg ind, typ) st
+	modify $ \s -> s { fnStack = (fid, st'):fs }
+	return (Arg ind)
 
 
 stmt :: S.Stmt -> Cmp ()
@@ -165,8 +178,8 @@ stmt s = case s of
 	S.If _ _ _ _    -> iff s
 	S.While _ _ _   -> while s
 	S.Block _ s     -> pushScope >> mapM_ stmt s >> popScope
-	S.ExprStmt e    -> expr e >> return ()
-	S.Return _ e    -> expr e >>= \val -> emit $ Set 0 val
+	S.ExprStmt e    -> exprStmt s
+	S.Return _ e    -> expr e >>= \val -> emit $ Set Ret val
 
 
 assign :: S.Stmt -> Cmp ()
@@ -184,6 +197,20 @@ expr exp = case exp of
 	S.Ident _ s     -> getName exp >>= \(id, typ) -> return (VIdent id typ)
 	S.Infix _ _ _ _ -> infixx exp
 	S.Func _ _ _    -> func exp
+	S.Call _ _ _    -> call exp
+	_               -> error "expr unhandled"
+
+
+call :: S.Expr -> Cmp Val
+call (S.Call pos nameExpr argExprs) = do
+	nameVal <- expr nameExpr
+	(id, targs, retty) <- case nameVal of
+		VIdent (Var id) (TFunc targs retty) -> return (id, targs, retty)
+		_ -> err pos "function call sucks"
+
+	assert (length targs == length argExprs) pos "incorrect number of args"
+	argVals <- mapM expr argExprs
+	return $ VCall (Var id) argVals TAny
 
 
 func :: S.Expr -> Cmp Val
@@ -193,10 +220,13 @@ func (S.Func pos args (S.Block _ stmts)) = do
 	let ftype = TFunc targs retty
 
 	fid <- createFunc ftype
+	mapM_ (\((name, typ), ind) -> declareArg name typ ind) (zip (zip args targs) [0..])
+	-- add args ?
+
 	mapM_ stmt stmts
 	finishFunc 
 
-	return $ VIdent fid ftype
+	return $ VIdent (Var fid) ftype
 
 	
 infixx :: S.Expr -> Cmp Val
@@ -212,8 +242,13 @@ infixx (S.Infix pos op e1 e2) = do
 	where
 		infixTable = [
 			((TInt,  TInt,  S.Plus),   TInt),
+			((TAny,  TInt,  S.Plus),   TInt),
+			((TInt,  TAny,  S.Plus),   TInt),
 			((TInt,  TInt,  S.Minus),  TInt),
 			((TInt,  TInt,  S.Times),  TInt),
+			((TAny,  TInt,  S.Times),  TInt),
+			((TInt,  TAny,  S.Times),  TInt),
+			((TAny,  TAny,  S.Times),  TInt),
 			((TInt,  TInt,  S.Divide), TInt),
 			((TInt,  TInt,  S.Mod),    TInt),
 			((TInt,  TInt,  S.EqEq),   TBool),
@@ -228,8 +263,8 @@ infixx (S.Infix pos op e1 e2) = do
 			VIdent _ _ -> return val
 			_ -> do
 				id <- uniqueId
-				emit $ Assign id val
-				return $ VIdent id (typeOf val)
+				emit $ Assign (Var id) val
+				return $ VIdent (Var id) (typeOf val)
 
 
 set :: S.Stmt -> Cmp ()
@@ -255,9 +290,9 @@ while (S.While pos cnd (S.Block _ stmts)) = do
 	assert (typeOf cndv == TBool) pos "while condition isn't boolean"
 
 	cndId <- uniqueId 
-	emit $ Assign cndId cndv
+	emit $ Assign (Var cndId) cndv
 
-	emit . IfBegin $ VInfix S.EqEq (VIdent cndId TBool) (VBool False) TBool
+	emit . IfBegin $ VInfix S.EqEq (VIdent (Var cndId) TBool) (VBool False) TBool
 	emit LoopBreak
 	emit IfEnd
 

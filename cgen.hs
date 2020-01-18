@@ -7,23 +7,26 @@ import qualified AST as A
 import IR
 
 
--- indentation state
-type CGenState = Int
-type CGen = StateT CGenState IO ()
-
-incIndent :: CGen
-incIndent =
-	modify (1+)
-
-decIndent :: CGen
-decIndent =
-	modify (+(-1))
+type GenState = Int
+type Gen = StateT GenState IO ()
 
 
--- conversion functions
+incIndent :: Gen
+incIndent = modify (+1)
+
+
+decIndent :: Gen
+decIndent = modify (+(-1))
+
+
+commaSep = intercalate ", "
+
+
 strId :: Ident -> String
-strId id =
-	"v" ++ show id
+strId id = case id of
+	Var ind -> 'v' : show ind
+	Arg ind -> 'a' : show ind
+	Ret     -> "ret"
 
 
 strType :: Type -> String
@@ -48,33 +51,55 @@ strOp op = case op of
 	_ -> error "strOp invalid"
 
 
+anyTo :: Type -> Val -> String
+anyTo typ val = case typ of
+	TInt    -> "anyToInt(" ++ strVal val ++ ")"
+	TBool   -> "anyToBool(" ++ strVal val ++ ")"
+	TString -> "anyToString(" ++ strVal val ++ ")"
+	TAny    -> strVal val
+
+
+toAny :: Val -> String
+toAny val = case typeOf val of
+	TInt    -> "intToAny(" ++ strVal val ++ ")"
+	TBool   -> "boolToAny(" ++ strVal val ++ ")"
+	TString -> "stringToAny(" ++ strVal val ++ ")"
+	TAny    -> strVal val
+
+
 strVal :: Val -> String
 strVal val = case val of
 	VInt i              -> show i
 	VBool b             -> if b then "true" else "false"
 	VString str         -> "\"" ++ str ++ "\""
 	VIdent id _         -> strId id
-	VInfix op v1 v2 typ -> intercalate " " [strVal v1, strOp op, strVal v2]
+	VCall id args _     -> concat [strId id, "(", commaSep (map toAny args), ")"]
+	VInfix op v1 v2 typ -> intercalate " " $ case (typeOf v1, typeOf v2) of
+		(TAny, TAny) -> [anyTo typ v1, strOp op, anyTo typ v2]
+		(TAny, _)    -> [anyTo typ v1, strOp op, strVal v2]
+		(_, TAny)    -> [strVal v1, strOp op, anyTo typ v2]
+		(_, _)       -> [strVal v1, strOp op, strVal v2]
 
-
+			
 -- basic generation
-line :: String -> CGen
+line :: String -> Gen
 line str = do
 	indent <- get
 	liftIO $ putStrLn (replicate indent '\t' ++ str)
 	
 
-stmt :: String -> CGen
+stmt :: String -> Gen
 stmt str =
 	line (str ++ ";")
 
 
 -- generate program
-prog :: Prog -> CGen
+prog :: Prog -> Gen
 prog prg = do
 	mapM_ line [
 		"#include <stdio.h>",
 		"#include <stdbool.h>",
+		"#include <assert.h>",
 		"",
 		"typedef enum {",
 		"\tTInt,",
@@ -85,11 +110,31 @@ prog prg = do
 		"typedef struct {",
 		"\tType type;",
 		"\tunion {",
-		"\t\tint vInt;",
-		"\t\tfloat vFloat;",
-		"\t\tbool vBool;",
+		"\t\tint   Int;",
+		"\t\tfloat Float;",
+		"\t\tbool  Bool;",
 		"\t};",
-		"} Any;"
+		"} Any;",
+		"",
+		"int anyToInt(Any any) {",
+		"\tassert(any.type == TInt);",
+		"\treturn any.Int;",
+		"}",
+		"",
+		"Any intToAny(int i) {",
+		"\tAny any;",
+		"\tany.type = TInt;",
+		"\tany.Int = i;",
+		"\treturn any;",
+		"}",
+		"",
+		"void printAny(Any any) {",
+		"\tswitch (any.type) {",
+		"\tcase TInt:",
+		"\t\t printf(\"%d\", any.Int);",
+		"\t}",
+		"}",
+		""
 		]
 
 	mapM_ (\(id, fn) -> func id fn) $ reverse prg
@@ -103,25 +148,27 @@ prog prg = do
 	line "}"
 
 
-func :: Ident -> Func -> CGen
+func :: Index -> Func -> Gen
 func id (TFunc targs retty, opns) = do
 	let strargs = intercalate ", " $ zipWith ($) (map strArg targs) [0..]
 	line ""
-	line $ strType retty ++ " " ++ strId id ++ "(" ++ strargs ++ ") {"
+	line $ strType retty ++ " " ++ strId (Var id) ++ "(" ++ strargs ++ ") {"
 	incIndent
+	stmt $ (strType retty) ++ " ret"
 	mapM_ genOpn opns
+	stmt "return ret"
 	decIndent
 	line "}"
 	where
 		strArg typ num = strType typ ++ " a" ++ show num
 
 
-genOpn :: Opn -> CGen
+genOpn :: Opn -> Gen
 genOpn opn = case opn of
 	Assign _ _  -> assign opn
+	Set Ret val -> stmt $ strId Ret ++ " = " ++ toAny val
 	Set id val  -> stmt $ strId id ++ " = " ++ strVal val
 	Print _     -> genPrint opn
-	Call id     -> stmt $ strId id ++ "()"
 	LoopBegin   -> line "while (true) {" >> incIndent
 	LoopBreak   -> stmt "break"
 	LoopEnd     -> decIndent >> line "}"
@@ -130,7 +177,7 @@ genOpn opn = case opn of
 	IfEnd       -> decIndent >> line "}"
 
 
-assign :: Opn -> CGen
+assign :: Opn -> Gen
 assign (Assign id val) = stmt $ case typeOf val of
 	TFunc targs retty -> strTFunc targs retty id ++ " = &" ++ strVal val
 	_                 -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
@@ -144,7 +191,7 @@ assign (Assign id val) = stmt $ case typeOf val of
 			++ ")"
 
 
-genPrint :: Opn -> CGen
+genPrint :: Opn -> Gen
 genPrint (Print vals) =
 	let (fmts, args) = fmt vals
 	in stmt $ "printf(\"" ++ fmts ++ "\\n\", " ++ args ++ ")"
@@ -156,6 +203,7 @@ genPrint (Print vals) =
 			TBool     -> ("%s", strVal val ++ " ? \"true\" : \"false\"")
 			TString   -> ("%s", strVal val)
 			TFunc _ _ -> ("%s", "\"func\"") 
+			TAny      -> ("%s", "\"any\"")
 		fmt (v:vs) =
 			let (f, a) = fmt [v]; (fs, as) = fmt vs
 			in (f ++ ", " ++ fs, a ++ ", " ++ as)

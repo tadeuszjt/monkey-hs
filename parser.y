@@ -17,6 +17,7 @@ import qualified AST as S
 %nonassoc  '<=' '>='
 %nonassoc  '(' ')'
 
+
 %token
     '*'        { L.ReservedOp _ "*" }
     '/'        { L.ReservedOp _ "/" }
