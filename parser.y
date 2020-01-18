@@ -74,7 +74,7 @@ Stmt1 : let ident '=' Expr     { let (L.Ident _ s) = $2 in S.Assign (L.tokPosn $
       | Expr                   { S.ExprStmt $1 }
 
 
-If : if Expr Block Else        { S.If (L.tokPosn $1) $2 $3 Nothing }
+If : if Expr Block Else        { S.If (L.tokPosn $1) $2 $3 $4 }
 
 Else : {- empty -}             { Nothing }
      | else Block              { Just $2 }

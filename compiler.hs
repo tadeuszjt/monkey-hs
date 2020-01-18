@@ -213,6 +213,11 @@ call (S.Call pos nameExpr argExprs) = do
 	nameVal <- expr nameExpr
 	(id, targs, retty) <- case nameVal of
 		VIdent (Var id) (TFunc targs retty) -> return (id, targs, retty)
+		VCall _ vals (TFunc targs retty)    -> do
+			id' <- uniqueId
+			emit $ Assign (Var id') nameVal
+			return (id', targs, retty)
+
 		_ -> err pos "function call sucks"
 
 	assert (length targs == length argExprs) pos "incorrect number of args"
@@ -232,38 +237,20 @@ func (S.Func pos args (S.Block _ stmts)) = do
 	-- look at returns
 	fns <- gets funcs
 	let Just (t, opns) = Map.lookup fid fns
-	let retTypeSet = Set.fromList $
-		[ let (Return val) = opn in typeOf val
-		| opn <- opns
-		, isReturn opn
-		]
+	let retTypeSet = Set.fromList $ map (\(Return val) -> typeOf val) (filter isReturn opns)
 
 	retty <- case (length $ Set.toList retTypeSet) of
 		0 -> err pos "no return statement"
 		1 -> return $ Set.elemAt 0 retTypeSet
 		_ -> return TAny
 
-
 	finishFunc retty
-
 	return $ VIdent (Var fid) (TFunc targs retty)
 	where
 		isReturn (Return _) = True
 		isReturn _          = False
 
 
-
---emit :: Opn -> Cmp ()
---emit opn = do
---	(fid, _):_ <- gets fnStack
---	fns        <- gets funcs
---	let Just (t, opns) = Map.lookup fid fns
---	let f' = (t, opns ++ [opn])
---	modify $ \s -> s { funcs = Map.insert fid f' fns }
-
-
-
-	
 infixx :: S.Expr -> Cmp Val
 infixx (S.Infix pos op e1 e2) = do
 	v1 <- infVal =<< expr e1
@@ -279,7 +266,11 @@ infixx (S.Infix pos op e1 e2) = do
 			((TInt,  TInt,  S.Plus),   TInt),
 			((TAny,  TInt,  S.Plus),   TInt),
 			((TInt,  TAny,  S.Plus),   TInt),
-			((TInt,  TInt,  S.Minus),  TInt),
+			((TAny,  TAny,  S.Plus),   TInt),
+			((TInt,  TInt,  S.Minus),   TInt),
+			((TAny,  TInt,  S.Minus),   TInt),
+			((TInt,  TAny,  S.Minus),   TInt),
+			((TAny,  TAny,  S.Minus),   TInt),
 			((TInt,  TInt,  S.Times),  TInt),
 			((TAny,  TInt,  S.Times),  TInt),
 			((TInt,  TAny,  S.Times),  TInt),
@@ -288,7 +279,11 @@ infixx (S.Infix pos op e1 e2) = do
 			((TInt,  TInt,  S.Mod),    TInt),
 			((TInt,  TInt,  S.EqEq),   TBool),
 			((TInt,  TInt,  S.LThan),  TBool),
+			((TAny,  TInt,  S.LThan),  TBool),
+			((TInt,  TAny,  S.LThan),  TBool),
 			((TInt,  TInt,  S.GThan),  TBool),
+			((TAny,  TInt,  S.GThan),  TBool),
+			((TInt,  TAny,  S.GThan),  TBool),
 			((TBool, TBool, S.OrOr),   TBool)
 			]
 
@@ -340,7 +335,10 @@ while (S.While pos cnd (S.Block _ stmts)) = do
 iff :: S.Stmt -> Cmp ()
 iff (S.If pos cnd (S.Block _ stmts) els) = do
 	cndVal <- expr cnd
-	assert (typeOf cndVal == TBool) pos "if condition isn't boolean"
+	case typeOf cndVal of
+		TBool -> return ()
+		TAny  -> return ()
+		_     -> err pos "if condition isn't bool"
 
 	emit (IfBegin cndVal)
 	pushScope

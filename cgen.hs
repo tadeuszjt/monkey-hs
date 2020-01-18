@@ -56,10 +56,11 @@ strId id = case id of
 
 strType :: Type -> String
 strType typ = case typ of
-	TInt    -> "int"
-	TBool   -> "bool"
-	TString -> "char*"
-	TAny    -> "Any"
+	TInt      -> "int"
+	TBool     -> "bool"
+	TString   -> "char*"
+	TAny      -> "Any"
+	TFunc _ _ -> "void*"
 
 
 strOp :: A.Op -> String
@@ -77,11 +78,14 @@ strOp op = case op of
 
 
 anyTo :: Type -> Val -> String
-anyTo typ val = case typ of
-	TInt    -> "anyToInt(" ++ strVal val ++ ")"
-	TBool   -> "anyToBool(" ++ strVal val ++ ")"
-	TString -> "anyToString(" ++ strVal val ++ ")"
-	TAny    -> strVal val
+anyTo typ val =
+	if typeOf val /= TAny
+	then strVal val
+	else case typ of
+		TInt    -> "anyToInt(" ++ strVal val ++ ")"
+		TBool   -> "anyToBool(" ++ strVal val ++ ")"
+		TString -> "anyToString(" ++ strVal val ++ ")"
+		TAny    -> strVal val
 
 
 toAny :: Val -> String
@@ -94,17 +98,19 @@ toAny val = case typeOf val of
 
 strVal :: Val -> String
 strVal val = case val of
-	VInt i              -> show i
-	VBool b             -> if b then "true" else "false"
-	VString str         -> "\"" ++ str ++ "\""
-	VIdent id _         -> strId id
-	VCall id args _     -> concat [strId id, "(", commaSep (map toAny args), ")"]
-	VInfix op v1 v2 typ -> intercalate " " $ case (typeOf v1, typeOf v2) of
-		(TAny, TAny) -> [anyTo typ v1, strOp op, anyTo typ v2]
-		(TAny, _)    -> [anyTo typ v1, strOp op, strVal v2]
-		(_, TAny)    -> [strVal v1, strOp op, anyTo typ v2]
-		(_, _)       -> [strVal v1, strOp op, strVal v2]
-
+	VInt i          -> show i
+	VBool b         -> if b then "true" else "false"
+	VString str     -> "\"" ++ str ++ "\""
+	VIdent id _     -> strId id
+	VCall id args _ -> concat [strId id, "(", commaSep (map toAny args), ")"]
+	VInfix _ _ _ _  -> strInfix val
+	
+strInfix :: Val -> String
+strInfix val@(VInfix op v1 v2 typ) = intercalate " " $ case (op, typeOf v1, typeOf v2) of
+	(_, TInt, TInt) -> [strVal v1, strOp op, strVal v2]
+	(_, TAny, TInt) -> [anyTo TInt v1, strOp op, strVal v2]
+	(_, TInt, TAny) -> [strVal v1, strOp op, anyTo TInt v2]
+	(_, TAny, TAny) -> [anyTo TInt v1, strOp op, anyTo TInt v2]
 			
 -- basic generation
 line :: String -> Gen ()
@@ -144,6 +150,11 @@ prog prg = do
 		"int anyToInt(Any any) {",
 		"\tassert(any.type == TInt);",
 		"\treturn any.Int;",
+		"}",
+		"",
+		"bool anyToBool(Any any) {",
+		"\tassert(any.type == TBool);",
+		"\treturn any.Bool;",
 		"}",
 		"",
 		"Any intToAny(int i) {",
@@ -187,9 +198,7 @@ func id (TFunc targs retty, opns) = do
 	line ""
 	line $ strType retty ++ " " ++ strId (Var id) ++ "(" ++ strargs ++ ") {"
 	incIndent
-	stmt $ (strType retty) ++ " ret"
 	mapM_ genOpn opns
-	stmt "return ret"
 	decIndent
 	line "}"
 	where
@@ -208,23 +217,24 @@ genOpn opn = case opn of
 	LoopBegin   -> line "while (true) {" >> incIndent
 	LoopBreak   -> stmt "break"
 	LoopEnd     -> decIndent >> line "}"
-	IfBegin val -> line ("if (" ++ strVal val ++ ") {") >> incIndent
+	IfBegin val -> line ("if (" ++ anyTo TBool val ++ ") {") >> incIndent
 	IfElse      -> decIndent >> line "} else {" >> incIndent
 	IfEnd       -> decIndent >> line "}"
 
 
 assign :: Opn -> Gen ()
 assign (Assign id val) = stmt $ case typeOf val of
-	TFunc targs retty -> strTFunc targs retty id ++ " = &" ++ strVal val
+	TFunc targs retty -> strTFunc targs retty id ++ " = " ++ strVal val
 	_                 -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
 	where
-		strTFunc targs retty id =
-			strType retty
-			++ " (*"
-			++ strId id
-			++ ")("
-			++ intercalate ", " (map strType targs)
-			++ ")"
+		strTFunc targs retty id = concat [
+			strType retty,
+			" (*",
+			strId id,
+			")(",
+			intercalate ", " (map strType targs),
+			")"
+			]
 
 
 genPrint :: Opn -> Gen ()

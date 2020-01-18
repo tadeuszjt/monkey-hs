@@ -1,10 +1,22 @@
 let x = 2;
-let y = 2 + 3 * x;
 
 let f = fn(x) {
-	return x * x;
+	if (x > 10) {
+		return x * x;
+	} else {
+		return 1;
+	}
 };
 
-let z = f(x);
+let y = 2;
+print(f(x));
 
-print(z);
+let z = fn(switch) {
+	if switch {
+		return fn(x) { return x + 1; };
+	} else {
+		return fn(x) { return x - 1; };
+	}
+};
+
+print(z(true)(2));

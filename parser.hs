@@ -762,13 +762,13 @@ happyReduction_9 (HappyAbsSyn11  happy_var_1)
 happyReduction_9 _  = notHappyAtAll 
 
 happyReduce_10 = happyReduce 4 7 happyReduction_10
-happyReduction_10 (_ `HappyStk`
+happyReduction_10 ((HappyAbsSyn8  happy_var_4) `HappyStk`
 	(HappyAbsSyn9  happy_var_3) `HappyStk`
 	(HappyAbsSyn11  happy_var_2) `HappyStk`
 	(HappyTerminal happy_var_1) `HappyStk`
 	happyRest)
 	 = HappyAbsSyn7
-		 (S.If (L.tokPosn happy_var_1) happy_var_2 happy_var_3 Nothing
+		 (S.If (L.tokPosn happy_var_1) happy_var_2 happy_var_3 happy_var_4
 	) `HappyStk` happyRest
 
 happyReduce_11 = happySpecReduce_0  8 happyReduction_11
