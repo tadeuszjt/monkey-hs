@@ -18,6 +18,7 @@ data Type
 	| TBool
 	| TString
 	| TFunc [Type] Type
+	| TStaticArray Type
 	| TAny
 	deriving (Show, Eq, Ord)
 
@@ -28,6 +29,8 @@ data Val
 	| VIdent Ident Type
 	| VInfix A.Op Val Val Type
 	| VCall Ident [Val] Type
+	| VStaticArray [Val] Type
+	| VSubscript Val Val
 	deriving Show
 	
 data Opn
@@ -41,9 +44,11 @@ data Opn
 
 typeOf :: Val -> Type
 typeOf v = case v of
-	VInt _         -> TInt
-	VBool _        -> TBool
-	VString _      -> TString
-	VIdent _ t     -> t
-	VInfix _ _ _ t -> t
-	VCall _ _ t    -> t
+	VInt _           -> TInt
+	VBool _          -> TBool
+	VString _        -> TString
+	VStaticArray _ t -> TStaticArray t
+	VIdent _ t       -> t
+	VInfix _ _ _ t   -> t
+	VCall _ _ t      -> t
+	VSubscript arr _ -> let TStaticArray t = typeOf arr in t

@@ -61,6 +61,7 @@ strType typ = case typ of
 	TString   -> "char*"
 	TAny      -> "Any"
 	TFunc _ _ -> "void*"
+	TStaticArray t -> strType t ++ "[]"
 
 
 strOp :: A.Op -> String
@@ -79,7 +80,7 @@ strOp op = case op of
 
 anyTo :: Type -> Val -> String
 anyTo typ val =
-	if typeOf val /= TAny
+	if typeOf val == typ
 	then strVal val
 	else case typ of
 		TInt    -> "anyToInt(" ++ strVal val ++ ")"
@@ -98,12 +99,20 @@ toAny val = case typeOf val of
 
 strVal :: Val -> String
 strVal val = case val of
-	VInt i          -> show i
-	VBool b         -> if b then "true" else "false"
-	VString str     -> "\"" ++ str ++ "\""
-	VIdent id _     -> strId id
-	VCall id args _ -> concat [strId id, "(", commaSep (map toAny args), ")"]
-	VInfix _ _ _ _  -> strInfix val
+	VInt i             -> show i
+	VBool b            -> if b then "true" else "false"
+	VString str        -> "\"" ++ str ++ "\""
+	VIdent id _        -> strId id
+	VCall id args _    -> concat [strId id, "(", commaSep (map toAny args), ")"]
+	VInfix _ _ _ _     -> strInfix val
+	VStaticArray _ _   -> strStaticArray val
+	VSubscript arr ind -> strVal arr ++ "[" ++ strVal ind ++ "]"
+
+strStaticArray :: Val -> String
+strStaticArray (VStaticArray vals typ) =
+	if typ == TAny
+	then "{" ++ commaSep (map toAny vals) ++ "}"
+	else "{" ++ commaSep (map strVal vals) ++ "}"
 	
 strInfix :: Val -> String
 strInfix val@(VInfix op v1 v2 typ) = intercalate " " $ case (op, typeOf v1, typeOf v2) of
@@ -132,44 +141,16 @@ prog prg = do
 		"#include <stdbool.h>",
 		"#include <assert.h>",
 		"",
-		"typedef enum {",
-		"\tTInt,",
-		"\tTFloat,",
-		"\tTBool,",
-		"} Type;",
-		"",
+		"typedef enum { TInt, TFloat, TBool } Type;",
 		"typedef struct {",
 		"\tType type;",
-		"\tunion {",
-		"\t\tint   Int;",
-		"\t\tfloat Float;",
-		"\t\tbool  Bool;",
-		"\t};",
+		"\tunion { int Int; float Float; bool  Bool; };",
 		"} Any;",
 		"",
-		"int anyToInt(Any any) {",
-		"\tassert(any.type == TInt);",
-		"\treturn any.Int;",
-		"}",
-		"",
-		"bool anyToBool(Any any) {",
-		"\tassert(any.type == TBool);",
-		"\treturn any.Bool;",
-		"}",
-		"",
-		"Any intToAny(int i) {",
-		"\tAny any;",
-		"\tany.type = TInt;",
-		"\tany.Int = i;",
-		"\treturn any;",
-		"}",
-		"",
-		"Any boolToAny(bool b) {",
-		"\tAny any;",
-		"\tany.type = TBool;",
-		"\tany.Bool = b;",
-		"\treturn any;",
-		"}",
+		"int  anyToInt(Any any)  { assert(any.type == TInt); return any.Int; }",
+		"bool anyToBool(Any any) { assert(any.type == TBool); return any.Bool; }",
+		"Any  intToAny(int i)    { Any any; any.type = TInt; any.Int = i; return any; }",
+		"Any  boolToAny(bool b)  { Any any; any.type = TBool; any.Bool = b; return any; }",
 		"",
 		"void printAny(Any any) {",
 		"\tswitch (any.type) {",
@@ -225,6 +206,7 @@ genOpn opn = case opn of
 assign :: Opn -> Gen ()
 assign (Assign id val) = stmt $ case typeOf val of
 	TFunc targs retty -> strTFunc targs retty id ++ " = " ++ strVal val
+	TStaticArray typ  -> intercalate " " [strType typ, strId id ++ "[]", "=", strVal val]
 	_                 -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
 	where
 		strTFunc targs retty id = concat [
@@ -250,6 +232,7 @@ genPrint (Print vals) =
 			TString   -> ("%s", strVal val)
 			TFunc _ _ -> ("%s", "\"func\"") 
 			TAny      -> ("%s", "\"any\"")
+			TStaticArray _ -> ("%s", "\"array\"")
 		fmt (v:vs) =
 			let (f, a) = fmt [v]; (fs, as) = fmt vs
 			in (f ++ ", " ++ fs, a ++ ", " ++ as)

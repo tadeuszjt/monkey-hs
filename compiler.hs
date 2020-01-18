@@ -198,14 +198,40 @@ assign (S.Assign pos name exp) = do
 
 expr :: S.Expr -> Cmp Val
 expr exp = case exp of
-	S.Int _ i       -> return (VInt i)
-	S.Bool _ b      -> return (VBool b)
-	S.String _ s    -> return (VString s)
-	S.Ident _ s     -> getName exp >>= \(id, typ) -> return (VIdent id typ)
-	S.Infix _ _ _ _ -> infixx exp
-	S.Func _ _ _    -> func exp
-	S.Call _ _ _    -> call exp
-	_               -> error "expr unhandled"
+	S.Int _ i         -> return (VInt i)
+	S.Bool _ b        -> return (VBool b)
+	S.String _ s      -> return (VString s)
+	S.Ident _ s       -> getName exp >>= \(id, typ) -> return (VIdent id typ)
+	S.Infix _ _ _ _   -> infixx exp
+	S.Func _ _ _      -> func exp
+	S.Call _ _ _      -> call exp
+	S.Array _ _       -> staticArray exp
+	S.Subscript _ _ _ -> subscript exp
+	_                 -> error $ "expr unhandled: " ++ (take 60 $ show exp)
+
+
+subscript :: S.Expr -> Cmp Val
+subscript (S.Subscript pos arr ind) = do
+	arrVal <- expr arr
+	elemTyp <- case typeOf arrVal of
+		TStaticArray t -> return t
+		_              -> err pos "subscripting on non array value"
+
+	indVal <- expr ind
+	assert (typeOf indVal == TInt) pos "subscript type ins't int"
+
+	return $ VSubscript arrVal indVal
+
+
+staticArray :: S.Expr -> Cmp Val
+staticArray (S.Array pos exps) = do
+	vals <- mapM expr exps
+	let typeSet = Set.fromList $ map typeOf vals
+	atype <- case length $ Set.toList typeSet of
+		1 -> return (Set.elemAt 0 typeSet)
+		_ -> return TAny
+
+	return $ VStaticArray vals atype
 
 
 call :: S.Expr -> Cmp Val
@@ -267,10 +293,10 @@ infixx (S.Infix pos op e1 e2) = do
 			((TAny,  TInt,  S.Plus),   TInt),
 			((TInt,  TAny,  S.Plus),   TInt),
 			((TAny,  TAny,  S.Plus),   TInt),
-			((TInt,  TInt,  S.Minus),   TInt),
-			((TAny,  TInt,  S.Minus),   TInt),
-			((TInt,  TAny,  S.Minus),   TInt),
-			((TAny,  TAny,  S.Minus),   TInt),
+			((TInt,  TInt,  S.Minus),  TInt),
+			((TAny,  TInt,  S.Minus),  TInt),
+			((TInt,  TAny,  S.Minus),  TInt),
+			((TAny,  TAny,  S.Minus),  TInt),
 			((TInt,  TInt,  S.Times),  TInt),
 			((TAny,  TInt,  S.Times),  TInt),
 			((TInt,  TAny,  S.Times),  TInt),

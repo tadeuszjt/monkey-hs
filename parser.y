@@ -16,6 +16,7 @@ import qualified AST as S
 %nonassoc  '<' '>'
 %nonassoc  '<=' '>='
 %nonassoc  '(' ')'
+%nonassoc  '[' ']'
 
 
 %token
@@ -96,6 +97,7 @@ Expr : int                     { let (L.Int p i) = $1 in S.Int p i }
      | ident                   { (\(L.Ident p s) -> S.Ident p s) $1 }
 	 | Array                   { $1 }
      | '(' Expr ')'            { $2 }
+	 | Expr '[' Expr ']'       { S.Subscript (S.exprPosn $3) $1 $3 }
      | Expr '(' Args ')'       { S.Call  (S.exprPosn $1) $1 $3 }
      | Expr '+' Expr           { S.Infix (L.tokPosn $2) S.Plus $1 $3 }
      | Expr '-' Expr           { S.Infix (L.tokPosn $2) S.Minus $1 $3 }
