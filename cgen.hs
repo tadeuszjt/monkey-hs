@@ -108,12 +108,14 @@ strVal val = case val of
 	VStaticArray _ _   -> strStaticArray val
 	VSubscript arr ind -> strVal arr ++ "[" ++ strVal ind ++ "]"
 
+
 strStaticArray :: Val -> String
 strStaticArray (VStaticArray vals typ) =
 	if typ == TAny
 	then "{" ++ commaSep (map toAny vals) ++ "}"
 	else "{" ++ commaSep (map strVal vals) ++ "}"
 	
+
 strInfix :: Val -> String
 strInfix (VInfix op v1 v2 typ) = intercalate " " $ case (typeOf v1, typeOf v2) of
 	(TAny, TAny) -> [anyTo TInt v1, strOp op, anyTo TInt v2]
@@ -142,21 +144,21 @@ prog prg = do
 		"#include <stdbool.h>",
 		"#include <assert.h>",
 		"",
-		"typedef enum { TInt, TFloat, TBool } Type;",
+		"typedef enum { TInt, TBool } Type;",
 		"typedef struct {",
 		"\tType type;",
-		"\tunion { int Int; float Float; bool  Bool; };",
+		"\tunion { int Int; bool Bool; };",
 		"} Any;",
 		"",
 		"int  anyToInt(Any any)  { assert(any.type == TInt); return any.Int; }",
 		"bool anyToBool(Any any) { assert(any.type == TBool); return any.Bool; }",
-		"Any  intToAny(int i)    { Any any; any.type = TInt; any.Int = i; return any; }",
-		"Any  boolToAny(bool b)  { Any any; any.type = TBool; any.Bool = b; return any; }",
+		"Any  intToAny(int i)    { Any any = {TInt, i}; return any; }",
+		"Any  boolToAny(bool b)  { Any any = {TBool, b}; return any; }",
 		"",
 		"void printAny(Any any) {",
 		"\tswitch (any.type) {",
-		"\tcase TInt:",
-		"\t\t printf(\"%d\", any.Int);",
+		"\t\tcase TInt:  printf(\"%d\", any.Int); break;",
+		"\t\tcase TBool: printf(\"%s\", any.Bool ? \"true\" : \"false\"); break;",
 		"\t}",
 		"}",
 		""
@@ -206,35 +208,31 @@ genOpn opn = case opn of
 
 
 assign :: Opn -> Gen ()
-assign (Assign id val) = stmt $ case typeOf val of
-	TFunc targs retty -> strTFunc targs retty id ++ " = " ++ strVal val
-	TStaticArray typ  -> intercalate " " [strType typ, strId id ++ "[]", "=", strVal val]
-	_                 -> strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
+assign opn@(Assign id val) = case typeOf val of
+	TFunc targs retty -> stmt $ strTFunc targs retty id ++ " = " ++ strVal val
+	TStaticArray _    -> assignArray opn
+	_                 -> stmt $ strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
 	where
-		strTFunc targs retty id = concat [
-			strType retty,
-			" (*",
-			strId id,
-			")(",
-			intercalate ", " (map strType targs),
-			")"
-			]
+		strTFunc targs retty id =
+			concat [strType retty, " (*", strId id, ")(", commaSep (map strType targs), ")"]
+
+assignArray :: Opn -> Gen ()
+assignArray (Assign id (VStaticArray vals typ)) = do
+	line $ strType typ ++ " " ++ strId id ++ "[] = {"
+	incIndent
+	let strs = map (if typ == TAny then toAny else strVal) vals
+	mapM_ (\s -> line $ s ++ ",") strs
+	decIndent
+	line "};"
 
 
 genPrint :: Opn -> Gen ()
-genPrint (Print vals) =
-	let (fmts, args) = fmt vals
-	in stmt $ "printf(\"" ++ fmts ++ "\\n\", " ++ args ++ ")"
+genPrint (Print vals) = case vals of
+	[]     -> return ()
+	[val]  -> genPrint' (Print [val]) >> stmt "putchar('\\n')"
+	(v:vs) -> genPrint' (Print [v]) >> stmt "putchar(',')" >> genPrint (Print vs)
 	where
-		fmt [VBool True] = ("%s", "\"true\"")
-		fmt [VBool False] = ("%s", "\"false\"")
-		fmt [val] = case typeOf val of
-			TInt      -> ("%d", strVal val)
-			TBool     -> ("%s", strVal val ++ " ? \"true\" : \"false\"")
-			TString   -> ("%s", strVal val)
-			TFunc _ _ -> ("%s", "\"func\"") 
-			TAny      -> ("%s", "\"any\"")
-			TStaticArray _ -> ("%s", "\"array\"")
-		fmt (v:vs) =
-			let (f, a) = fmt [v]; (fs, as) = fmt vs
-			in (f ++ ", " ++ fs, a ++ ", " ++ as)
+	genPrint' (Print [val]) = case typeOf val of
+		TInt  -> stmt $ "printf(\"%d\", " ++ strVal val ++ ")"
+		TBool -> stmt $ "puts(" ++ strVal val ++ " ? \"true\" : \"false\")"
+		TAny  -> stmt $ "printAny(" ++ toAny val ++ ")"
