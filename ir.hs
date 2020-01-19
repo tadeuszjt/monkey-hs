@@ -17,9 +17,9 @@ data Type
 	= TInt
 	| TBool
 	| TString
+	| TOrd
 	| TFunc [Type] Type
 	| TStaticArray Type
-	| TAny
 	deriving (Show, Eq, Ord)
 
 data Val

@@ -94,7 +94,7 @@ createFunc targs = do
 	fns <- gets funcs
 	stk <- gets fnStack
 	modify $ \s -> s {
-		funcs   = Map.insert id (TFunc targs TAny, []) fns, -- any is placeholder
+		funcs   = Map.insert id (TFunc targs TOrd, []) fns, -- any is placeholder
 		fnStack = (id, initSymTab):stk
 		}
 	return id
@@ -151,6 +151,14 @@ emit opn = do
 	let f' = (t, opns ++ [opn])
 	modify $ \s -> s { funcs = Map.insert fid f' fns }
 
+
+-- takes a value and turns it into an ident
+identify :: Val -> Cmp Val
+identify val@(VIdent _ _) = return val
+identify val = do
+	id <- uniqueId
+	emit $ Assign (Var id) val
+	return $ VIdent (Var id) (typeOf val)
 
 
 -- assigns a name to an id and type in top symbol table
@@ -235,33 +243,41 @@ staticArray :: S.Expr -> Cmp Val
 staticArray (S.Array pos exps) = do
 	vals <- mapM expr exps
 	let typeSet = Set.fromList $ map typeOf vals
-	atype <- case length $ Set.toList typeSet of
+	elemType <- case length $ Set.toList typeSet of
 		1 -> return (Set.elemAt 0 typeSet)
-		_ -> return TAny
+		_ -> return TOrd
 
-	return $ VStaticArray vals atype
+	-- check type
+	case elemType of
+		TInt -> return ()
+		TBool -> return ()
+		TStaticArray _ -> err pos "can't have arrays in arrays"
+		TOrd -> err pos "can't have arrays of any"
+
+	return $ VStaticArray vals elemType
 
 
 call :: S.Expr -> Cmp Val
 call (S.Call pos nameExpr argExprs) = do
-	nameVal <- expr nameExpr
-	(id, targs, retty) <- case nameVal of
-		VIdent (Var id) (TFunc targs retty) -> return (id, targs, retty)
-		VCall _ vals (TFunc targs retty)    -> do
-			id' <- uniqueId
-			emit $ Assign (Var id') nameVal
-			return (id', targs, retty)
+	vIdent <- identify =<< expr nameExpr
+	case typeOf vIdent of
+		TFunc _ _ -> return ()
+		_         -> err pos "call isn't function"
 
-		_ -> err pos "function call sucks"
-
+	let VIdent id (TFunc targs retty) = vIdent
 	assert (length targs == length argExprs) pos "incorrect number of args"
+
 	argVals <- mapM expr argExprs
-	return $ VCall (Var id) argVals retty
+	sanVals <- mapM sanitise argVals
+	return $ VCall id sanVals retty
+	where
+		sanitise val@(VStaticArray _ _) = identify val
+		sanitise val                    = return val
 
 
 func :: S.Expr -> Cmp Val
 func (S.Func pos args (S.Block _ stmts)) = do
-	let targs = replicate (length args) TAny
+	let targs = replicate (length args) TOrd
 
 	fid <- createFunc targs
 	mapM_ (\((name, typ), ind) -> declareArg name typ ind) (zip (zip args targs) [0..])
@@ -276,7 +292,7 @@ func (S.Func pos args (S.Block _ stmts)) = do
 	retty <- case (length $ Set.toList retTypeSet) of
 		0 -> err pos "no return statement"
 		1 -> return $ Set.elemAt 0 retTypeSet
-		_ -> return TAny
+		_ -> return TOrd
 
 	finishFunc retty
 	return $ VIdent (Var fid) (TFunc targs retty)
@@ -298,37 +314,37 @@ infixx (S.Infix pos op e1 e2) = do
 	where
 		infixTable = [
 			((TInt,  TInt,  S.Plus),   TInt),
-			((TAny,  TInt,  S.Plus),   TInt),
-			((TInt,  TAny,  S.Plus),   TInt),
-			((TAny,  TAny,  S.Plus),   TInt),
+			((TOrd,  TInt,  S.Plus),   TInt),
+			((TInt,  TOrd,  S.Plus),   TInt),
+			((TOrd,  TOrd,  S.Plus),   TInt),
 
 			((TInt,  TInt,  S.Minus),  TInt),
-			((TAny,  TInt,  S.Minus),  TInt),
-			((TInt,  TAny,  S.Minus),  TInt),
-			((TAny,  TAny,  S.Minus),  TInt),
+			((TOrd,  TInt,  S.Minus),  TInt),
+			((TInt,  TOrd,  S.Minus),  TInt),
+			((TOrd,  TOrd,  S.Minus),  TInt),
 
 			((TInt,  TInt,  S.Times),  TInt),
-			((TAny,  TInt,  S.Times),  TInt),
-			((TInt,  TAny,  S.Times),  TInt),
-			((TAny,  TAny,  S.Times),  TInt),
+			((TOrd,  TInt,  S.Times),  TInt),
+			((TInt,  TOrd,  S.Times),  TInt),
+			((TOrd,  TOrd,  S.Times),  TInt),
 
 			((TInt,  TInt,  S.Divide), TInt),
 			((TInt,  TInt,  S.Mod),    TInt),
 
 			((TInt,  TInt,  S.EqEq),   TBool),
-			((TAny,  TInt,  S.EqEq),   TBool),
-			((TInt,  TAny,  S.EqEq),   TBool),
-			((TAny,  TAny,  S.EqEq),   TBool),
+			((TOrd,  TInt,  S.EqEq),   TBool),
+			((TInt,  TOrd,  S.EqEq),   TBool),
+			((TOrd,  TOrd,  S.EqEq),   TBool),
 
 			((TInt,  TInt,  S.LThan),  TBool),
-			((TAny,  TInt,  S.LThan),  TBool),
-			((TInt,  TAny,  S.LThan),  TBool),
-			((TAny,  TAny,  S.LThan),  TBool),
+			((TOrd,  TInt,  S.LThan),  TBool),
+			((TInt,  TOrd,  S.LThan),  TBool),
+			((TOrd,  TOrd,  S.LThan),  TBool),
 
 			((TInt,  TInt,  S.GThan),  TBool),
-			((TAny,  TInt,  S.GThan),  TBool),
-			((TInt,  TAny,  S.GThan),  TBool),
-			((TAny,  TAny,  S.GThan),  TBool),
+			((TOrd,  TInt,  S.GThan),  TBool),
+			((TInt,  TOrd,  S.GThan),  TBool),
+			((TOrd,  TOrd,  S.GThan),  TBool),
 
 			((TBool, TBool, S.OrOr),   TBool)
 			]
@@ -337,10 +353,8 @@ infixx (S.Infix pos op e1 e2) = do
 			VInt _     -> return val
 			VBool _    -> return val
 			VIdent _ _ -> return val
-			_ -> do
-				id <- uniqueId
-				emit $ Assign (Var id) val
-				return $ VIdent (Var id) (typeOf val)
+			_          -> identify val
+
 
 
 set :: S.Stmt -> Cmp ()
@@ -355,20 +369,20 @@ set (S.Set pos name exp) = do
 
 exprStmt :: S.Stmt -> Cmp ()
 exprStmt (S.ExprStmt exp) = case exp of
-	S.Call _ (S.Ident _ "print") args -> emit . Print =<< mapM expr args
+	S.Call _ (S.Ident _ "print") args -> emit . Print =<< mapM sanitise =<< mapM expr args
 	_                                 -> emit . Expr =<< expr exp
+	where
+		sanitise val@(VStaticArray _ _) = identify val
+		sanitise val                    = return val
 
 
 while :: S.Stmt -> Cmp ()
 while (S.While pos cnd (S.Block _ stmts)) = do	
 	emit LoopBegin
-	cndv <- expr cnd
-	assert (typeOf cndv == TBool) pos "while condition isn't boolean"
+	cndVIdent <- identify =<< expr cnd
+	assert (typeOf cndVIdent == TBool) pos "while condition isn't boolean"
 
-	cndId <- uniqueId 
-	emit $ Assign (Var cndId) cndv
-
-	emit . IfBegin $ VInfix S.EqEq (VIdent (Var cndId) TBool) (VBool False) TBool
+	emit . IfBegin $ VInfix S.EqEq cndVIdent (VBool False) TBool
 	emit LoopBreak
 	emit IfEnd
 
@@ -383,7 +397,7 @@ iff (S.If pos cnd (S.Block _ stmts) els) = do
 	cndVal <- expr cnd
 	case typeOf cndVal of
 		TBool -> return ()
-		TAny  -> return ()
+		TOrd  -> return ()
 		_     -> err pos "if condition isn't bool"
 
 	emit (IfBegin cndVal)

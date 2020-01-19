@@ -45,6 +45,7 @@ import qualified AST as S
     false      { L.Reserved _ "false" }
     while      { L.Reserved _ "while" }
     return     { L.Reserved _ "return" }
+    print      { L.Reserved _ "print" }
 
     int        { L.Int _ _ }
     ident      { L.Ident _ _ }
@@ -98,7 +99,8 @@ Expr : int                     { let (L.Int p i) = $1 in S.Int p i }
 	 | Array                   { $1 }
      | '(' Expr ')'            { $2 }
 	 | Expr '[' Expr ']'       { S.Subscript (S.exprPosn $3) $1 $3 }
-     | Expr '(' Args ')'       { S.Call  (S.exprPosn $1) $1 $3 }
+     | Expr '(' Args ')'       { S.Call  (L.tokPosn $2) $1 $3 }
+     | print '(' Args ')'      { S.Call  (L.tokPosn $2) (S.Ident (L.tokPosn $1) "print") $3 }
      | Expr '+' Expr           { S.Infix (L.tokPosn $2) S.Plus $1 $3 }
      | Expr '-' Expr           { S.Infix (L.tokPosn $2) S.Minus $1 $3 }
      | Expr '*' Expr           { S.Infix (L.tokPosn $2) S.Times $1 $3 }

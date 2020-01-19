@@ -21,7 +21,7 @@ $alpha  = [a-zA-Z]
 $symbol = [\{\}\(\)\[\]\,\;]
 $opSym  = [\+\-\*\/\%\<\>\=]
 
-@reserved   = let | fn | while | if | else | true | false | return
+@reserved   = let | fn | while | if | else | true | false | return | print
 @reservedOp = $opSym | "==" | "<=" | ">=" | "||" | "&&"
 @string     = $alpha | $digit | ' '
 
