@@ -56,10 +56,11 @@ strId id = case id of
 
 strType :: Type -> String
 strType typ = case typ of
+	TVoid     -> "void"
 	TInt      -> "int"
 	TBool     -> "bool"
 	TString   -> "char*"
-	TOrd      -> "Any"
+	TOrd      -> "Ord"
 	TFunc _ _ -> "void*"
 	TStaticArray t -> strType t ++ "*"
 

@@ -18,6 +18,7 @@ data Type
 	| TBool
 	| TString
 	| TOrd
+	| TVoid 
 	| TFunc [Type] Type
 	| TStaticArray Type
 	deriving (Show, Eq, Ord)

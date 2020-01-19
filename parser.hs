@@ -996,21 +996,21 @@ happyReduction_26 (_ `HappyStk`
 happyReduce_27 = happyReduce 4 11 happyReduction_27
 happyReduction_27 (_ `HappyStk`
 	(HappyAbsSyn13  happy_var_3) `HappyStk`
-	_ `HappyStk`
+	(HappyTerminal happy_var_2) `HappyStk`
 	(HappyAbsSyn11  happy_var_1) `HappyStk`
 	happyRest)
 	 = HappyAbsSyn11
-		 (S.Call  (S.exprPosn happy_var_1) happy_var_1 happy_var_3
+		 (S.Call  (L.tokPosn happy_var_2) happy_var_1 happy_var_3
 	) `HappyStk` happyRest
 
 happyReduce_28 = happyReduce 4 11 happyReduction_28
 happyReduction_28 (_ `HappyStk`
 	(HappyAbsSyn13  happy_var_3) `HappyStk`
-	_ `HappyStk`
+	(HappyTerminal happy_var_2) `HappyStk`
 	(HappyTerminal happy_var_1) `HappyStk`
 	happyRest)
 	 = HappyAbsSyn11
-		 (S.Call  (L.tokPosn happy_var_1) (S.Ident (L.tokPosn happy_var_1) "print") happy_var_3
+		 (S.Call  (L.tokPosn happy_var_2) (S.Ident (L.tokPosn happy_var_1) "print") happy_var_3
 	) `HappyStk` happyRest
 
 happyReduce_29 = happySpecReduce_3  11 happyReduction_29

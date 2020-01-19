@@ -1,5 +1,5 @@
-let a = [true, false, true, false];
+let f = fn(x) {
+	print(x);
+};
 
-print([1, 2, 3]);
-print(a);
-
+f(2);

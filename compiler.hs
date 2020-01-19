@@ -60,9 +60,11 @@ err :: L.AlexPosn -> String -> Cmp a
 err pos str =
 	lift $ Left (pos, str)
 
+
 emptyErr :: Cmp a
 emptyErr =
 	lift $ Left (L.AlexPn 0 0 0, "")
+
 
 withErr :: Cmp a -> L.AlexPosn -> String -> Cmp a
 withErr cmp pos str = do
@@ -73,6 +75,7 @@ withErr cmp pos str = do
 			return v
 		Left _ -> err pos str
 
+
 assert :: Bool -> L.AlexPosn -> String -> Cmp ()
 assert b pos str =
 	if b
@@ -80,6 +83,7 @@ assert b pos str =
 	else err pos str
 
 
+-- compilation primitives
 uniqueId :: Cmp Index
 uniqueId = do
 	count <- gets idCount
@@ -161,28 +165,35 @@ identify val = do
 	return $ VIdent (Var id) (typeOf val)
 
 
+sanitise :: Val -> Cmp Val
+sanitise val@(VStaticArray _ _) = identify val
+sanitise val                    = return val
+
+
 -- assigns a name to an id and type in top symbol table
 declare :: S.Name -> Type -> Cmp Ident
 declare name typ = do
-	(fid, st):fs <- gets fnStack
-	case lookupSymTab name [head st] of
+	(curFn, symTab):fs <- gets fnStack
+	case lookupSymTab name [head symTab] of
 		Just _  -> emptyErr
 		Nothing -> return ()
+
 	id <- uniqueId
-	let st' = insertSymTab name (Var id, typ) st
-	modify $ \s -> s { fnStack = (fid, st'):fs }
+	let symTab' = insertSymTab name (Var id, typ) symTab
+	modify $ \s -> s { fnStack = (curFn, symTab'):fs }
 	return (Var id)
 
 
 -- assigns name to an arg in symbol table
 declareArg :: S.Name -> Type -> Index -> Cmp Ident
 declareArg name typ ind = do
-	(fid, st):fs <- gets fnStack
-	case lookupSymTab name [head st] of
+	(curFn, symTab):fs <- gets fnStack
+	case lookupSymTab name [head symTab] of
 		Just _  -> emptyErr
 		Nothing -> return ()
-	let st' = insertSymTab name (Arg ind, typ) st
-	modify $ \s -> s { fnStack = (fid, st'):fs }
+
+	let symTab' = insertSymTab name (Arg ind, typ) symTab
+	modify $ \s -> s { fnStack = (curFn, symTab'):fs }
 	return (Arg ind)
 
 
@@ -190,11 +201,27 @@ stmt :: S.Stmt -> Cmp ()
 stmt s = case s of
 	S.Assign _ _ _  -> assign s
 	S.Set _ _ _     -> set s
-	S.If _ _ _ _    -> iff s
-	S.While _ _ _   -> while s
-	S.Block _ s     -> pushScope >> mapM_ stmt s >> popScope
-	S.ExprStmt e    -> exprStmt s
 	S.Return _ _    -> returnStmt s
+	S.ExprStmt e    -> exprStmt s
+	S.Block _ s     -> pushScope >> mapM_ stmt s >> popScope
+	S.If _ _ _ _    -> ifStmt s
+	S.While _ _ _   -> while s
+
+
+assign :: S.Stmt -> Cmp ()
+assign (S.Assign pos name exp) = do
+	val <- expr exp
+	id <- withErr (declare name $ typeOf val) pos (name ++ " already defined")
+	emit $ Assign id val
+
+
+set :: S.Stmt -> Cmp ()
+set (S.Set pos name exp) = do
+	(id, typ) <- getName (S.Ident pos name)
+	val <- expr exp
+	if typ == typeOf val
+	then emit (Set id val)
+	else err pos "type mismatch"
 
 
 returnStmt :: S.Stmt -> Cmp ()
@@ -206,11 +233,36 @@ returnStmt (S.Return pos exp) = do
 	emit (Return val)
 
 
-assign :: S.Stmt -> Cmp ()
-assign (S.Assign pos name exp) = do
-	val <- expr exp
-	id <- withErr (declare name $ typeOf val) pos (name ++ " already defined")
-	emit $ Assign id val
+exprStmt :: S.Stmt -> Cmp ()
+exprStmt (S.ExprStmt exp) = case exp of
+	S.Call _ (S.Ident _ "print") args -> emit . Print =<< mapM sanitise =<< mapM expr args
+	S.Call _ _ _                      -> emit . Expr =<< call exp
+	_                                 -> emit . Expr =<< expr exp
+
+
+
+ifStmt :: S.Stmt -> Cmp ()
+ifStmt (S.If pos cnd (S.Block _ stmts) els) = do
+	cndVal <- expr cnd
+	case typeOf cndVal of
+		TBool -> return ()
+		TOrd  -> return ()
+		_     -> err pos "if condition isn't bool"
+
+	emit (IfBegin cndVal)
+	pushScope
+	mapM_ stmt stmts
+	popScope
+
+	case els of
+		Nothing                 -> return ()
+		Just (S.Block _ stmts') -> emit IfElse >> pushScope >> mapM_ stmt stmts' >> popScope
+		Just elif               -> emit IfElse >> ifStmt elif
+
+	emit IfEnd
+
+
+
 
 
 expr :: S.Expr -> Cmp Val
@@ -221,7 +273,7 @@ expr exp = case exp of
 	S.Ident _ s       -> getName exp >>= \(id, typ) -> return (VIdent id typ)
 	S.Infix _ _ _ _   -> infixx exp
 	S.Func _ _ _      -> func exp
-	S.Call _ _ _      -> call exp
+	S.Call _ _ _      -> exprCall exp
 	S.Array _ _       -> staticArray exp
 	S.Subscript _ _ _ -> subscript exp
 	_                 -> error $ "expr unhandled: " ++ (take 60 $ show exp) ++ "..."
@@ -257,6 +309,14 @@ staticArray (S.Array pos exps) = do
 	return $ VStaticArray vals elemType
 
 
+exprCall :: S.Expr -> Cmp Val
+exprCall exp@(S.Call pos _ _) = do
+	val@(VCall id vals retty) <- call exp
+	case retty of
+		TVoid -> err pos "function does not return a value"
+		_     -> return val
+
+
 call :: S.Expr -> Cmp Val
 call (S.Call pos nameExpr argExprs) = do
 	vIdent <- identify =<< expr nameExpr
@@ -279,23 +339,23 @@ func :: S.Expr -> Cmp Val
 func (S.Func pos args (S.Block _ stmts)) = do
 	let targs = replicate (length args) TOrd
 
-	fid <- createFunc targs
+	id <- createFunc targs
 	mapM_ (\((name, typ), ind) -> declareArg name typ ind) (zip (zip args targs) [0..])
 
 	mapM_ stmt stmts
 
 	-- look at returns
 	fns <- gets funcs
-	let Just (t, opns) = Map.lookup fid fns
+	let Just (t, opns) = Map.lookup id fns
 	let retTypeSet = Set.fromList $ map (\(Return val) -> typeOf val) (filter isReturn opns)
 
-	retty <- case (length $ Set.toList retTypeSet) of
-		0 -> err pos "no return statement"
-		1 -> return $ Set.elemAt 0 retTypeSet
-		_ -> return TOrd
+	let retty = case length (Set.toList retTypeSet) of
+		0 -> TVoid
+		1 -> Set.elemAt 0 retTypeSet
+		_ -> TOrd
 
 	finishFunc retty
-	return $ VIdent (Var fid) (TFunc targs retty)
+	return $ VIdent (Var id) (TFunc targs retty)
 	where
 		isReturn (Return _) = True
 		isReturn _          = False
@@ -356,26 +416,6 @@ infixx (S.Infix pos op e1 e2) = do
 			_          -> identify val
 
 
-
-set :: S.Stmt -> Cmp ()
-set (S.Set pos name exp) = do
-	(id, typ) <- getName (S.Ident pos name)
-	val <- expr exp
-	if typ == typeOf val
-	then emit (Set id val)
-	else err pos "type mismatch"
-
-
-
-exprStmt :: S.Stmt -> Cmp ()
-exprStmt (S.ExprStmt exp) = case exp of
-	S.Call _ (S.Ident _ "print") args -> emit . Print =<< mapM sanitise =<< mapM expr args
-	_                                 -> emit . Expr =<< expr exp
-	where
-		sanitise val@(VStaticArray _ _) = identify val
-		sanitise val                    = return val
-
-
 while :: S.Stmt -> Cmp ()
 while (S.While pos cnd (S.Block _ stmts)) = do	
 	emit LoopBegin
@@ -390,24 +430,3 @@ while (S.While pos cnd (S.Block _ stmts)) = do
 	mapM_ stmt stmts
 	popScope
 	emit LoopEnd
-
-
-iff :: S.Stmt -> Cmp ()
-iff (S.If pos cnd (S.Block _ stmts) els) = do
-	cndVal <- expr cnd
-	case typeOf cndVal of
-		TBool -> return ()
-		TOrd  -> return ()
-		_     -> err pos "if condition isn't bool"
-
-	emit (IfBegin cndVal)
-	pushScope
-	mapM_ stmt stmts
-	popScope
-
-	case els of
-		Nothing                 -> return ()
-		Just (S.Block _ stmts') -> emit IfElse >> pushScope >> mapM_ stmt stmts' >> popScope
-		Just elif               -> emit IfElse >> iff elif
-
-	emit IfEnd
