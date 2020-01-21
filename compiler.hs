@@ -14,19 +14,23 @@ type SymTab = [Map.Map S.Name (Ident, Type)]
 
 initSymTab = [Map.empty]
 
+
 lookupSymTab :: S.Name -> SymTab -> Maybe (Ident, Type)
 lookupSymTab name []     = Nothing
 lookupSymTab name (x:xs) = case Map.lookup name x of
 	Just (i, t) -> Just (i, t)
 	Nothing     -> lookupSymTab name xs
 
+
 insertSymTab :: S.Name -> (Ident, Type) -> SymTab -> SymTab
 insertSymTab name val (x:xs) =
 	(Map.insert name val x):xs
 
+
 pushSymTab :: SymTab -> SymTab
 pushSymTab st =
 	(Map.empty):st
+
 
 popSymTab :: SymTab -> SymTab
 popSymTab st =
@@ -42,6 +46,7 @@ data CmpState
 		}
 	deriving Show
 
+
 initCmpState = CmpState {
 	idCount = 1,
 	funcs   = Map.singleton 0 (TFunc [] TInt, []),
@@ -51,7 +56,7 @@ initCmpState = CmpState {
 
 type CmpError = (L.AlexPosn, String)
 
--- cmp uses either as a monad
+
 type Cmp a = StateT CmpState (Either CmpError) a
 
 
@@ -141,19 +146,16 @@ compile astProg = do
 	evalStateT cmp initCmpState
 	where
 		cmp :: Cmp Prog
-		cmp = do 
-			mapM_ stmt astProg
-			fns <- gets funcs
-			return $ Map.toList fns
+		cmp = mapM_ stmt astProg >> gets funcs >>= return . Map.toList
 
 
 emit :: Opn -> Cmp ()
 emit opn = do
-	(fid, _):_ <- gets fnStack
-	fns        <- gets funcs
-	let Just (t, opns) = Map.lookup fid fns
+	(curFn, _):_ <- gets fnStack
+	fns          <- gets funcs
+	let Just (t, opns) = Map.lookup curFn fns
 	let f' = (t, opns ++ [opn])
-	modify $ \s -> s { funcs = Map.insert fid f' fns }
+	modify $ \s -> s { funcs = Map.insert curFn f' fns }
 
 
 -- takes a value and turns it into an ident
@@ -165,23 +167,16 @@ identify val = do
 	return $ VIdent (Var id) (typeOf val)
 
 
-sanitise :: Val -> Cmp Val
-sanitise val@(VStaticArray _ _) = identify val
-sanitise val                    = return val
-
-
 -- assigns a name to an id and type in top symbol table
-declare :: S.Name -> Type -> Cmp Ident
-declare name typ = do
+declare :: S.Name -> Ident -> Type -> Cmp ()
+declare name id typ = do
 	(curFn, symTab):fs <- gets fnStack
 	case lookupSymTab name [head symTab] of
 		Just _  -> emptyErr
 		Nothing -> return ()
 
-	id <- uniqueId
-	let symTab' = insertSymTab name (Var id, typ) symTab
+	let symTab' = insertSymTab name (id, typ) symTab
 	modify $ \s -> s { fnStack = (curFn, symTab'):fs }
-	return (Var id)
 
 
 -- assigns name to an arg in symbol table
@@ -211,8 +206,13 @@ stmt s = case s of
 assign :: S.Stmt -> Cmp ()
 assign (S.Assign pos name exp) = do
 	val <- expr exp
-	id <- withErr (declare name $ typeOf val) pos (name ++ " already defined")
-	emit $ Assign id val
+	case val of
+		VIdent id (TArray _ _) ->
+			withErr (declare name id $ typeOf val) pos (name ++ " already defined")
+		_ -> do
+			id <- uniqueId
+			withErr (declare name (Var id) $ typeOf val) pos (name ++ " already defined")
+			emit $ Assign (Var id) val
 
 
 set :: S.Stmt -> Cmp ()
@@ -228,14 +228,14 @@ returnStmt :: S.Stmt -> Cmp ()
 returnStmt (S.Return pos exp) = do
 	val <- expr exp
 	case typeOf val of
-		TStaticArray _ -> err pos "can't return arrays"
-		_              -> return ()
+		TArray _ _ -> err pos "can't return arrays"
+		_          -> return ()
 	emit (Return val)
 
 
 exprStmt :: S.Stmt -> Cmp ()
 exprStmt (S.ExprStmt exp) = case exp of
-	S.Call _ (S.Ident _ "print") args -> emit . Print =<< mapM sanitise =<< mapM expr args
+	S.Call _ (S.Ident _ "print") args -> emit . Print =<< mapM expr args
 	S.Call _ _ _                      -> emit . Expr =<< call exp
 	_                                 -> emit . Expr =<< expr exp
 
@@ -271,42 +271,52 @@ expr exp = case exp of
 	S.Bool _ b        -> return (VBool b)
 	S.String _ s      -> return (VString s)
 	S.Ident _ s       -> getName exp >>= \(id, typ) -> return (VIdent id typ)
-	S.Infix _ _ _ _   -> infixx exp
+	S.Infix _ _ _ _   -> infixExpr exp
 	S.Func _ _ _      -> func exp
 	S.Call _ _ _      -> exprCall exp
-	S.Array _ _       -> staticArray exp
 	S.Subscript _ _ _ -> subscript exp
-	_                 -> error $ "expr unhandled: " ++ (take 60 $ show exp) ++ "..."
+	S.Array _ _       -> array exp
+	_ -> error $ "unhandled expression: " ++ show exp
+
+
+
+array :: S.Expr -> Cmp Val
+array (S.Array pos exps) = do
+	vals <- mapM expr exps
+	let typeSet = Set.toList $ Set.fromList (map typeOf vals)
+	et <- elemType typeSet
+	id <- uniqueId
+	emit $ Alloc (Var id) vals et
+	return $ VIdent (Var id) (TArray et $ length vals)
+	where
+		elemType :: [Type] -> Cmp Type
+		elemType typeSet
+			| length typeSet == 0  = return TAny
+			| length typeSet == 1  = return (head typeSet)
+			| allSameArray typeSet = return (head typeSet) 
+			| allOrd typeSet       = return TOrd
+			| otherwise            = return TAny
+
+		allOrd [t]    = elem t [TInt, TBool, TString, TOrd]
+		allOrd (t:ts) = allOrd [t] && allOrd ts
+
+		allSameArray typeSet = case typeSet of
+			[TArray _ _]                      -> True
+			(TArray t1 _ :ts@(TArray t2 _:_)) -> t1 == t2 && allSameArray ts
+			_                                 -> False
 
 
 subscript :: S.Expr -> Cmp Val
 subscript (S.Subscript pos arr ind) = do
 	arrVal <- expr arr
 	elemTyp <- case typeOf arrVal of
-		TStaticArray t -> return t
-		_              -> err pos "subscripting on non array value"
+		TArray t l -> return t
+		_          -> err pos "subscripting on non array value"
 
 	indVal <- expr ind
 	assert (typeOf indVal == TInt) pos "subscript type ins't int"
 	return $ VSubscript arrVal indVal
 
-
-staticArray :: S.Expr -> Cmp Val
-staticArray (S.Array pos exps) = do
-	vals <- mapM expr exps
-	let typeSet = Set.fromList $ map typeOf vals
-	elemType <- case length $ Set.toList typeSet of
-		1 -> return (Set.elemAt 0 typeSet)
-		_ -> return TOrd
-
-	-- check type
-	case elemType of
-		TInt -> return ()
-		TBool -> return ()
-		TStaticArray _ -> err pos "can't have arrays in arrays"
-		TOrd -> err pos "can't have arrays of any"
-
-	return $ VStaticArray vals elemType
 
 
 exprCall :: S.Expr -> Cmp Val
@@ -328,20 +338,16 @@ call (S.Call pos nameExpr argExprs) = do
 	assert (length targs == length argExprs) pos "incorrect number of args"
 
 	argVals <- mapM expr argExprs
-	sanVals <- mapM sanitise argVals
-	return $ VCall id sanVals retty
+	return $ VCall id argVals retty
 	where
-		sanitise val@(VStaticArray _ _) = identify val
-		sanitise val                    = return val
 
 
 func :: S.Expr -> Cmp Val
 func (S.Func pos args (S.Block _ stmts)) = do
-	let targs = replicate (length args) TOrd
+	let argTypes = replicate (length args) TOrd
 
-	id <- createFunc targs
-	mapM_ (\((name, typ), ind) -> declareArg name typ ind) (zip (zip args targs) [0..])
-
+	id <- createFunc argTypes
+	mapM_ (\(name, typ, ind) -> declareArg name typ ind) (zip3 args argTypes [0..])
 	mapM_ stmt stmts
 
 	-- look at returns
@@ -352,17 +358,17 @@ func (S.Func pos args (S.Block _ stmts)) = do
 	let retty = case length (Set.toList retTypeSet) of
 		0 -> TVoid
 		1 -> Set.elemAt 0 retTypeSet
-		_ -> TOrd
+		n -> TOrd
 
 	finishFunc retty
-	return $ VIdent (Var id) (TFunc targs retty)
+	return $ VIdent (Var id) (TFunc argTypes retty)
 	where
 		isReturn (Return _) = True
 		isReturn _          = False
 
 
-infixx :: S.Expr -> Cmp Val
-infixx (S.Infix pos op e1 e2) = do
+infixExpr :: S.Expr -> Cmp Val
+infixExpr (S.Infix pos op e1 e2) = do
 	v1 <- infVal =<< expr e1
 	v2 <- infVal =<< expr e2 
 
@@ -429,4 +435,5 @@ while (S.While pos cnd (S.Block _ stmts)) = do
 	pushScope
 	mapM_ stmt stmts
 	popScope
+
 	emit LoopEnd

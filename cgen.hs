@@ -51,18 +51,19 @@ strId :: Ident -> String
 strId id = case id of
 	Var ind -> 'v' : show ind
 	Arg ind -> 'a' : show ind
-	Ret     -> "ret"
 
 
 strType :: Type -> String
 strType typ = case typ of
-	TVoid     -> "void"
-	TInt      -> "int"
-	TBool     -> "bool"
-	TString   -> "char*"
-	TOrd      -> "Ord"
-	TFunc _ _ -> "void*"
-	TStaticArray t -> strType t ++ "*"
+	TVoid      -> "void"
+	TInt       -> "int"
+	TBool      -> "bool"
+	TString    -> "char*"
+	TOrd       -> "Ord"
+	TAny       -> "Any"
+	TArray _ _ -> "Array"
+	TFunc _ _  -> "void*"
+	_ -> error $ "unhandled type: " ++ show typ
 
 
 strOp :: A.Op -> String
@@ -94,9 +95,51 @@ toOrd :: Val -> String
 toOrd val = case typeOf val of
 	TInt    -> "intToOrd(" ++ strVal val ++ ")"
 	TBool   -> "boolToOrd(" ++ strVal val ++ ")"
-	TString -> "stringToOrd(" ++ strVal val ++ ")"
+	TString -> "strToOrd(" ++ strVal val ++ ")"
 	TOrd    -> strVal val
 	_ -> error $ "can't toOrd " ++ show val
+
+
+toOrdLit :: Val -> String
+toOrdLit val = case typeOf val of
+	TInt  -> "{" ++ strVal val ++ ", TInt}"
+	TBool -> "{" ++ strVal val ++ ", TBool}"
+	TOrd  -> strVal val
+	_ -> error $ "can't make ord literal: " ++ show val
+
+
+toArrayLit :: Val -> String
+toArrayLit val = case typeOf val of
+	TArray t l -> "{" ++ strVal val ++ ", " ++ show l ++ "}"
+	_          -> error $ "cannot make array literal"
+
+
+toArray :: Val -> String
+toArray val = case typeOf val of
+	TArray t l -> "arr(" ++ strVal val ++ ", " ++ show l ++ ")"
+	_          -> error "can't toArray"
+
+
+toCType :: Type -> String
+toCType typ = case typ of
+	TInt -> "TInt"
+	TBool -> "TBool"
+	TString -> "TString"
+	TOrd -> "TOrd"
+	TArray _ _ -> "TArray"
+	TAny -> "TAny"
+
+toTypedArray :: Val -> String
+toTypedArray val = case typeOf val of
+	TArray t l -> "tarr(" ++ strVal val ++ ", " ++ show l ++ ", " ++ toCType t ++ ")"
+	_ -> error $ "couldn't toTypedArray"
+
+
+toAnyLit :: Val -> String
+toAnyLit val
+	| isOrd (typeOf val)   = "ordToAny(" ++ toOrd val ++ ")"
+	| isArray (typeOf val) = "tarrToAny(" ++ toTypedArray val ++ ")" 
+	| otherwise            = error "can't toAnyLit"
 
 
 strVal :: Val -> String
@@ -107,16 +150,9 @@ strVal val = case val of
 	VIdent id _        -> strId id
 	VCall id args _    -> concat [strId id, "(", commaSep (map toOrd args), ")"]
 	VInfix _ _ _ _     -> strInfix val
-	VStaticArray _ _   -> strStaticArray val
 	VSubscript arr ind -> strVal arr ++ "[" ++ strVal ind ++ "]"
+	_ -> error $ "strVal: " ++ show val
 
-
-strStaticArray :: Val -> String
-strStaticArray (VStaticArray vals typ) =
-	if typ == TOrd
-	then "{" ++ commaSep (map toOrd vals) ++ "}"
-	else "{" ++ commaSep (map strVal vals) ++ "}"
-	
 
 strInfix :: Val -> String
 strInfix (VInfix op v1 v2 typ) = intercalate " " $ case (typeOf v1, typeOf v2) of
@@ -148,24 +184,118 @@ prog prg = do
 		"",
 		"#define _len(x) (sizeof(x) / sizeof(*(x)))",
 		"",
-		"typedef enum { OInt, OBool } TOrd;",
+		"typedef enum {",
+		"\tTInt,",
+		"\tTBool,",
+		"\tTString,",
+		"\tTOrd,",
+		"\tTAny,",
+		"\tTArray,",
+		"} Type;",
+		"",
 		"typedef struct {",
-		"\tTOrd type;",
-		"\tunion { int Int; bool Bool; };",
+		"\tunion { int asInt; bool asBool; char* asString; };",
+		"\tType  type;",
 		"} Ord;",
 		"",
-		"int  ordToInt(Ord ord)  { assert(ord.type == OInt); return ord.Int; }",
-		"bool ordToBool(Ord ord) { assert(ord.type == OBool); return ord.Bool; }",
-		"Ord  intToOrd(int i)    { Ord ord = {OInt, i}; return ord; }",
-		"Ord  boolToOrd(bool b)  { Ord ord = {OBool, b}; return ord; }",
+		"typedef struct {",
+		"\tvoid* ptr;",
+		"\tint   len;",
+		"} Array;",
+		"",
+		"typedef struct {",
+		"\tvoid* ptr;",
+		"\tint   len;",
+		"\tType  type;",
+		"} TypedArray;",
+		"",
+		"typedef struct {",
+		"\tunion {",
+		"\t\tOrd        asOrd;",
+		"\t\tTypedArray asArray;",
+		"\t};",
+		"\tType type;",
+		"} Any;",
+		"",
+		"Array arr(void* ptr, int len) {",
+		"\tArray a = {ptr, len}; return a;",
+		"}",
+		"",
+		"TypedArray tarr(void* ptr, int len, Type type) {",
+		"\tTypedArray a = {ptr, len, type}; return a;",
+		"}",
+		"",
+		"Any ordToAny(Ord ord) {",
+		"\tAny a = {ord, TOrd}; return a;",
+		"}",
+		"",
+		"Any tarrToAny(TypedArray tarr) {",
+		"\tAny a; a.asArray = tarr; a.type = TArray; return a;",
+		"}",
+		"",
+		"int   ordToInt(Ord ord)    { assert(ord.type == TInt); return ord.asInt; }",
+		"bool  ordToBool(Ord ord)   { assert(ord.type == TBool); return ord.asBool; }",
+		"char* ordToString(Ord ord) { assert(ord.type == TString); return ord.asString; }",
+		"Ord   intToOrd(int i)      { Ord ord = {i, TInt}; return ord; }",
+		"Ord   boolToOrd(bool b)    { Ord ord = {b, TBool}; return ord; }",
+		"Ord   strToOrd(char* s) { Ord ord; ord.type = TString; ord.asString = s; return ord; }",
 		"",
 		"void printOrd(Ord ord) {",
 		"\tswitch (ord.type) {",
-		"\t\tcase OInt:  printf(\"%d\", ord.Int); break;",
-		"\t\tcase OBool: printf(\"%s\", ord.Bool ? \"true\" : \"false\"); break;",
+		"\t\tcase TInt:    printf(\"%d\", ord.asInt); break;",
+		"\t\tcase TBool:   printf(\"%s\", ord.asBool ? \"true\" : \"false\"); break;",
+		"\t\tcase TString: fputs(ord.asString, stdout); break;",
 		"\t}",
 		"}",
-		""
+		"",
+		"void printAny();",
+		"",
+		"void printTypedArray(TypedArray tarr) {",
+		"\tputchar('[');",
+		"\tswitch (tarr.type) {",
+		"\tcase TInt:",
+		"\t\tfor (int i = 0; i < tarr.len; i++)",
+		"\t\t\tprintf(\"%d%s\", ((int*)tarr.ptr)[i], i < tarr.len - 1 ? \", \" : \"\");",
+		"\t\tbreak;",
+		"\tcase TBool:",
+		"\t\tfor (int i = 0; i < tarr.len; i++)",
+		"\t\t\tprintf(\"%s%s\", ((bool*)tarr.ptr)[i] ? \"true\" : \"false\",",
+		"\t\t\t\ti < tarr. len - 1 ? \", \" : \"\");",
+		"\t\tbreak;",
+			"",
+		"\tcase TString:",
+		"\t\tfor (int i = 0; i < tarr.len; i++)",
+		"\t\t\tprintf(\"%s%s\", ((char**)tarr.ptr)[i], i < tarr.len - 1 ? \", \" : \"\");",
+		"\t\tbreak;",
+		"",
+		"\tcase TOrd:",
+		"\t\tfor (int i = 0; i < tarr.len; i++) {",
+		"\t\t\tprintOrd(((Ord*)tarr.ptr)[i]);",
+		"\t\t\tfputs(i < tarr.len - 1 ? \", \" : \"\", stdout);",
+		"\t\t}",
+		"\t\tbreak;",
+		"",
+		"\tcase TAny:",
+		"\t\tfor (int i = 0; i < tarr.len; i++) {",
+		"\t\t\tprintAny(((Any*)tarr.ptr)[i]);",
+		"\t\t\tfputs(i < tarr.len - 1 ? \", \" : \"\", stdout);",
+		"\t\t}",
+		"\t\tbreak;",
+		"\t}",
+		"\tputchar(']');",
+		"}",
+		"",
+		"void printAny(Any any) {",
+		"\tswitch (any.type) {",
+		"\tcase TOrd:",
+		"\t\tprintOrd(any.asOrd);",
+		"\t\tbreak;",
+		"",
+		"\tcase TArray:",
+		"\t\tprintTypedArray(any.asArray);",
+		"\t\tbreak;",
+		"\t}",
+		"}"
 		]
 
 	mapM_ (\(id, fn) -> func id fn) $ reverse prg
@@ -196,10 +326,10 @@ func id (TFunc targs retty, opns) = do
 genOpn :: Opn -> Gen ()
 genOpn opn = case opn of
 	Assign _ _  -> assign opn
+	Alloc _ _ _ -> alloc opn
 	Return val  -> getRetty >>= \typ -> case typ of
 		TOrd -> stmt $ "return " ++ toOrd val
 		_    -> stmt $ "return " ++ strVal val
-	Set Ret val -> stmt $ strId Ret ++ " = " ++ toOrd val
 	Set id val  -> stmt $ strId id ++ " = " ++ strVal val
 	Print _     -> genPrint opn
 	LoopBegin   -> line "while (true) {" >> incIndent
@@ -209,27 +339,31 @@ genOpn opn = case opn of
 	IfElse      -> decIndent >> line "} else {" >> incIndent
 	IfEnd       -> decIndent >> line "}"
 	Expr val    -> stmt $ strVal val
+	_ -> error $ "unhandled operation: " ++ show opn
+
+
+alloc :: Opn -> Gen ()
+alloc (Alloc id vals typ) = do
+	line $ strType typ ++ " " ++ strId id ++ "[] = {"
+	incIndent
+	mapM_ line $ map (\v -> case typ of
+		TArray _ _ -> toArrayLit v
+		TOrd       -> toOrdLit v
+		TAny       -> toAnyLit v
+		_          -> strVal v
+		++ ",") vals
+	decIndent
+	stmt "}"
+
 
 
 assign :: Opn -> Gen ()
 assign opn@(Assign id val) = case val of
 	VIdent _ (TFunc targs retty) -> stmt $ strTFunc targs retty id ++ " = " ++ strVal val
-	VStaticArray _ _             -> assignArray opn
 	_                            -> stmt $ strType (typeOf val) ++ " " ++ strId id ++ " = " ++ strVal val
 	where
 		strTFunc targs retty id =
 			concat [strType retty, " (*", strId id, ")(", commaSep (map strType targs), ")"]
-
-assignArray :: Opn -> Gen ()
-assignArray (Assign id (VStaticArray vals typ)) = do
-	line $ strType typ ++ " " ++ strId id ++ "[] = {"
-	incIndent
-	let strs = map (if typ == TOrd then toOrd else strVal) vals
-	mapM_ (\s -> line $ s ++ ",") strs
-	decIndent
-	line "};"
-assignArray opn =
-	error $ "can't assign array: " ++ show opn
 
 
 genPrint :: Opn -> Gen ()
@@ -237,30 +371,29 @@ genPrint (Print vals) = case vals of
 	[]     -> return ()
 	[val]  -> genPrint' (Print [val]) >> stmt "putchar('\\n')"
 	(v:vs) -> genPrint' (Print [v]) >> stmt "fputs(\", \", stdout)" >> genPrint (Print vs)
-	where
-		genPrint' (Print [val]) = case typeOf val of
-			TInt  -> stmt $ "printf(\"%d\", " ++ strVal val ++ ")"
-			TBool -> stmt $ "puts(" ++ strVal val ++ " ? \"true\" : \"false\")"
-			TOrd  -> stmt $ "printOrd(" ++ toOrd val ++ ")"
-			TStaticArray TInt -> do
-				stmt "putchar('[')"
-				line $ "for (int i = 0; i < _len(" ++ strVal val ++ ")-1; i++) {"
-				incIndent
-				stmt $ "printf(\"%d, \", " ++ strVal val ++ "[i])"
-				decIndent
-				line "}" 
-				stmt $ "printf(\"%d\", " ++ strVal val ++ "[_len(" ++ strVal val ++ ")-1])"
-				stmt "putchar(']')"
-			TStaticArray TBool -> do
-				stmt "putchar('[')"
-				line $ "for (int i = 0; i < _len(" ++ strVal val ++ "); i++) {"
-				incIndent
-				stmt $ "fputs(" ++ strVal val ++ "[i] ? \"true\" : \"false\", stdout)"
-				line $ "if (i < _len(" ++ strVal val ++ ") -1) { fputs(\", \", stdout); }"
-				decIndent
-				line "}" 
-				stmt "putchar(']')"
-			_ -> error $ "can't genPrint': " ++ show val
+genPrint' (Print [val]) = case typeOf val of
+	TInt    -> stmt $ "printf(\"%d\", " ++ strVal val ++ ")"
+	TBool   -> stmt $ "fputs(" ++ strVal val ++ " ? \"true\" : \"false\", stdout)"
+	TOrd    -> stmt $ "printOrd(" ++ toOrd val ++ ")"
+	TString -> stmt $ "fputs(" ++ strVal val ++ ", stdout)"
+	TArray typ len -> do
+		stmt "putchar('[')"
+		let lenStr = show len
+		line $ "for (int l = " ++ lenStr ++ " - 1, i = 0; i <=l; i++) {"
+		incIndent
+		let elem = strVal val ++ "[i]"
+		stmt . concat $ case typ of
+			TInt  -> ["printf(\"%d%s\", ", elem, ", i<l ? \", \":\"\")"]
+			TBool -> ["printf(\"%s%s\", ", elem, " ? \"true\" : \"false\", i<l ?\", \":\"\")"]
+			TOrd  -> ["printOrd(", elem, ");", " fputs(i<l ? \", \" : \"\", stdout)"]
+			TArray _ _ -> ["printf(\"%p%s\", &", elem, ", i<l ? \", \":\"\")"]
+			TAny       -> ["printAny(", elem, "); fputs(i<l ? \", \" : \"\", stdout);"]
+
+		decIndent
+		line "}"
+		stmt "putchar(']')"
+	_ -> error $ "can't genPrint': " ++ show val
+		
 
 
 

@@ -8,18 +8,24 @@ import qualified Parser as P
 import qualified AST as S
 import qualified Evaluate as E
 import qualified Compiler as C
+import qualified IR as I
 import qualified CGen as G
 
 main :: IO ()
 main = do
     [fname] <- getArgs
     h <- openFile fname ReadMode
+    hOpns <- openFile "opns" WriteMode
     content <- hGetContents h
     let tokens = L.alexScanTokens content
     let prog = P.parseTokens tokens
     case C.compile prog of
-        Left e -> printError e content fname
-        Right p -> evalStateT (G.prog p) G.initGenState
+        Left e  -> printError e content fname
+        Right p -> do
+            I.hPrintIR hOpns p
+            evalStateT (G.prog p) G.initGenState
+    hClose h
+    hClose hOpns
 	where
 		printError (L.AlexPn offset l c, str) contents fname = do
 			let lines' = lines [if c == '\t' then ' ' else c | c <- contents ]
