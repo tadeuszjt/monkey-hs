@@ -34,9 +34,7 @@ decIndent = do
 
 
 getRetty :: Gen Type
-getRetty = do
-	r <- gets retty
-	return r
+getRetty = gets retty
 
 
 setRetty :: Type -> Gen ()
@@ -122,12 +120,13 @@ toArray val = case typeOf val of
 
 toCType :: Type -> String
 toCType typ = case typ of
-	TInt -> "TInt"
-	TBool -> "TBool"
-	TString -> "TString"
-	TOrd -> "TOrd"
+	TInt       -> "TInt"
+	TBool      -> "TBool"
+	TString    -> "TString"
+	TOrd       -> "TOrd"
 	TArray _ _ -> "TArray"
-	TAny -> "TAny"
+	TAny       -> "TAny"
+
 
 toTypedArray :: Val -> String
 toTypedArray val = case typeOf val of
@@ -178,124 +177,7 @@ stmt str =
 prog :: Prog -> Gen ()
 prog prg = do
 	mapM_ line [
-		"#include <stdio.h>",
-		"#include <stdbool.h>",
-		"#include <assert.h>",
-		"",
-		"#define _len(x) (sizeof(x) / sizeof(*(x)))",
-		"",
-		"typedef enum {",
-		"\tTInt,",
-		"\tTBool,",
-		"\tTString,",
-		"\tTOrd,",
-		"\tTAny,",
-		"\tTArray,",
-		"} Type;",
-		"",
-		"typedef struct {",
-		"\tunion { int asInt; bool asBool; char* asString; };",
-		"\tType  type;",
-		"} Ord;",
-		"",
-		"typedef struct {",
-		"\tvoid* ptr;",
-		"\tint   len;",
-		"} Array;",
-		"",
-		"typedef struct {",
-		"\tvoid* ptr;",
-		"\tint   len;",
-		"\tType  type;",
-		"} TypedArray;",
-		"",
-		"typedef struct {",
-		"\tunion {",
-		"\t\tOrd        asOrd;",
-		"\t\tTypedArray asArray;",
-		"\t};",
-		"\tType type;",
-		"} Any;",
-		"",
-		"Array arr(void* ptr, int len) {",
-		"\tArray a = {ptr, len}; return a;",
-		"}",
-		"",
-		"TypedArray tarr(void* ptr, int len, Type type) {",
-		"\tTypedArray a = {ptr, len, type}; return a;",
-		"}",
-		"",
-		"Any ordToAny(Ord ord) {",
-		"\tAny a = {ord, TOrd}; return a;",
-		"}",
-		"",
-		"Any tarrToAny(TypedArray tarr) {",
-		"\tAny a; a.asArray = tarr; a.type = TArray; return a;",
-		"}",
-		"",
-		"int   ordToInt(Ord ord)    { assert(ord.type == TInt); return ord.asInt; }",
-		"bool  ordToBool(Ord ord)   { assert(ord.type == TBool); return ord.asBool; }",
-		"char* ordToString(Ord ord) { assert(ord.type == TString); return ord.asString; }",
-		"Ord   intToOrd(int i)      { Ord ord = {i, TInt}; return ord; }",
-		"Ord   boolToOrd(bool b)    { Ord ord = {b, TBool}; return ord; }",
-		"Ord   strToOrd(char* s) { Ord ord; ord.type = TString; ord.asString = s; return ord; }",
-		"",
-		"void printOrd(Ord ord) {",
-		"\tswitch (ord.type) {",
-		"\t\tcase TInt:    printf(\"%d\", ord.asInt); break;",
-		"\t\tcase TBool:   printf(\"%s\", ord.asBool ? \"true\" : \"false\"); break;",
-		"\t\tcase TString: fputs(ord.asString, stdout); break;",
-		"\t}",
-		"}",
-		"",
-		"void printAny();",
-		"",
-		"void printTypedArray(TypedArray tarr) {",
-		"\tputchar('[');",
-		"\tswitch (tarr.type) {",
-		"\tcase TInt:",
-		"\t\tfor (int i = 0; i < tarr.len; i++)",
-		"\t\t\tprintf(\"%d%s\", ((int*)tarr.ptr)[i], i < tarr.len - 1 ? \", \" : \"\");",
-		"\t\tbreak;",
-		"\tcase TBool:",
-		"\t\tfor (int i = 0; i < tarr.len; i++)",
-		"\t\t\tprintf(\"%s%s\", ((bool*)tarr.ptr)[i] ? \"true\" : \"false\",",
-		"\t\t\t\ti < tarr. len - 1 ? \", \" : \"\");",
-		"\t\tbreak;",
-			"",
-		"\tcase TString:",
-		"\t\tfor (int i = 0; i < tarr.len; i++)",
-		"\t\t\tprintf(\"%s%s\", ((char**)tarr.ptr)[i], i < tarr.len - 1 ? \", \" : \"\");",
-		"\t\tbreak;",
-		"",
-		"\tcase TOrd:",
-		"\t\tfor (int i = 0; i < tarr.len; i++) {",
-		"\t\t\tprintOrd(((Ord*)tarr.ptr)[i]);",
-		"\t\t\tfputs(i < tarr.len - 1 ? \", \" : \"\", stdout);",
-		"\t\t}",
-		"\t\tbreak;",
-		"",
-		"\tcase TAny:",
-		"\t\tfor (int i = 0; i < tarr.len; i++) {",
-		"\t\t\tprintAny(((Any*)tarr.ptr)[i]);",
-		"\t\t\tfputs(i < tarr.len - 1 ? \", \" : \"\", stdout);",
-		"\t\t}",
-		"\t\tbreak;",
-		"\t}",
-		"\tputchar(']');",
-		"}",
-		"",
-		"void printAny(Any any) {",
-		"\tswitch (any.type) {",
-		"\tcase TOrd:",
-		"\t\tprintOrd(any.asOrd);",
-		"\t\tbreak;",
-		"",
-		"\tcase TArray:",
-		"\t\tprintTypedArray(any.asArray);",
-		"\t\tbreak;",
-		"\t}",
-		"}"
+		"#include <cheader.h>"
 		]
 
 	mapM_ (\(id, fn) -> func id fn) $ reverse prg
