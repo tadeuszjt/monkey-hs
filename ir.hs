@@ -71,7 +71,9 @@ typeOf v = case v of
 	VIdent _ t       -> t
 	VInfix _ _ _ t   -> t
 	VCall _ _ t      -> t
-	VSubscript arr _ -> let TArray t _ = typeOf arr in t
+	VSubscript arr _ -> case typeOf arr of
+		TArray t _ -> t
+		TAny       -> TAny
 
 
 hPrintIR :: Handle -> Prog -> IO ()

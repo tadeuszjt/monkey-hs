@@ -108,13 +108,14 @@ toOrdLit val = case typeOf val of
 
 toArrayLit :: Val -> String
 toArrayLit val = case typeOf val of
-	TArray t l -> "{" ++ strVal val ++ ", " ++ show l ++ "}"
+	TArray t l -> "{" ++ strVal val ++ ", " ++ show l ++ ", " ++ toCType t ++ "}"
 	_          -> error $ "cannot make array literal"
 
 
 toArray :: Val -> String
 toArray val = case typeOf val of
-	TArray t l -> "arr(" ++ strVal val ++ ", " ++ show l ++ ")"
+	TArray t l -> "array(" ++ strVal val ++ ", " ++ show l ++ ", " ++ toCType t ++ ")"
+	TAny       -> "anyToArray(" ++ strVal val ++ ")"
 	_          -> error "can't toArray"
 
 
@@ -128,17 +129,14 @@ toCType typ = case typ of
 	TAny       -> "TAny"
 
 
-toTypedArray :: Val -> String
-toTypedArray val = case typeOf val of
-	TArray t l -> "tarr(" ++ strVal val ++ ", " ++ show l ++ ", " ++ toCType t ++ ")"
-	_ -> error $ "couldn't toTypedArray"
-
-
-toAnyLit :: Val -> String
-toAnyLit val
-	| isOrd (typeOf val)   = "ordToAny(" ++ toOrd val ++ ")"
-	| isArray (typeOf val) = "tarrToAny(" ++ toTypedArray val ++ ")" 
-	| otherwise            = error "can't toAnyLit"
+toAny :: Val -> String
+toAny val
+	| isOrd typ   = "ordToAny(" ++ toOrd val ++ ")"
+	| isArray typ = "arrayToAny(" ++ toArray val ++ ")" 
+	| typ == TAny = strVal val
+	| otherwise   = error $ "can't toAny: " ++ show typ
+	where
+		typ = typeOf val
 
 
 strVal :: Val -> String
@@ -149,8 +147,16 @@ strVal val = case val of
 	VIdent id _        -> strId id
 	VCall id args _    -> concat [strId id, "(", commaSep (map toOrd args), ")"]
 	VInfix _ _ _ _     -> strInfix val
-	VSubscript arr ind -> strVal arr ++ "[" ++ strVal ind ++ "]"
+	VSubscript arr ind -> strSubscript val
 	_ -> error $ "strVal: " ++ show val
+
+
+
+strSubscript :: Val -> String
+strSubscript (VSubscript arr ind) = case typeOf arr of
+	TArray (TArray t _) _ -> "access(" ++ strVal arr ++ "[" ++ strVal ind ++ "], " ++ strType t ++ ")"
+	TAny                  -> "accessAny(" ++ strVal arr ++ ", " ++ strVal ind ++ ")"
+	_                     -> strVal arr ++ "[" ++ strVal ind ++ "]"
 
 
 strInfix :: Val -> String
@@ -231,7 +237,7 @@ alloc (Alloc id vals typ) = do
 	mapM_ line $ map (\v -> case typ of
 		TArray _ _ -> toArrayLit v
 		TOrd       -> toOrdLit v
-		TAny       -> toAnyLit v
+		TAny       -> toAny v
 		_          -> strVal v
 		++ ",") vals
 	decIndent
@@ -254,27 +260,34 @@ genPrint (Print vals) = case vals of
 	[val]  -> genPrint' (Print [val]) >> stmt "putchar('\\n')"
 	(v:vs) -> genPrint' (Print [v]) >> stmt "fputs(\", \", stdout)" >> genPrint (Print vs)
 genPrint' (Print [val]) = case typeOf val of
-	TInt    -> stmt $ "printf(\"%d\", " ++ strVal val ++ ")"
-	TBool   -> stmt $ "fputs(" ++ strVal val ++ " ? \"true\" : \"false\", stdout)"
-	TOrd    -> stmt $ "printOrd(" ++ toOrd val ++ ")"
-	TString -> stmt $ "fputs(" ++ strVal val ++ ", stdout)"
-	TArray typ len -> do
-		stmt "putchar('[')"
-		let lenStr = show len
-		line $ "for (int l = " ++ lenStr ++ " - 1, i = 0; i <=l; i++) {"
-		incIndent
-		let elem = strVal val ++ "[i]"
-		stmt . concat $ case typ of
-			TInt  -> ["printf(\"%d%s\", ", elem, ", i<l ? \", \":\"\")"]
-			TBool -> ["printf(\"%s%s\", ", elem, " ? \"true\" : \"false\", i<l ?\", \":\"\")"]
-			TOrd  -> ["printOrd(", elem, ");", " fputs(i<l ? \", \" : \"\", stdout)"]
-			TArray _ _ -> ["printf(\"%p%s\", &", elem, ", i<l ? \", \":\"\")"]
-			TAny       -> ["printAny(", elem, "); fputs(i<l ? \", \" : \"\", stdout);"]
+	TInt        -> stmt $ "printf(\"%d\", " ++ strVal val ++ ")"
+	TBool       -> stmt $ "fputs(" ++ strVal val ++ " ? \"true\" : \"false\", stdout)"
+	TString     -> stmt $ "fputs(" ++ strVal val ++ ", stdout)"
+	TOrd        -> stmt $ "printOrd(" ++ toOrd val ++ ")"
+	TAny        -> stmt $ "printAny(" ++ toAny val ++ ")"
+	TArray _  _ -> printArray val
+	_           -> error $ "can't genPrint': " ++ show val
 
-		decIndent
-		line "}"
-		stmt "putchar(']')"
-	_ -> error $ "can't genPrint': " ++ show val
+
+printArray :: Val -> Gen ()
+printArray val = do
+	let TArray typ len = typeOf val
+	stmt "putchar('[')"
+	line $ "for (int i = 0; i < " ++ show len ++ "; i++) {"
+	incIndent
+	let elemStr = strVal val ++ "[i]"
+	case typ of
+		TInt       -> stmt $ "printf(\"%d\", " ++ elemStr ++ ")" 
+		TBool      -> stmt $ "fputs(" ++ elemStr ++ " ? \"true\" : \"false\", stdout)"
+		TString    -> stmt $ "fputs(" ++ elemStr ++ ", stdout)"
+		TOrd       -> stmt $ "printOrd(" ++ elemStr ++ ")"
+		TAny       -> stmt $ "printAny(" ++ elemStr ++ ")"
+		TArray t _ -> stmt $ "printArray(" ++ toArray val ++ ")"
+
+	stmt $ "if (i < " ++ show (len - 1) ++ ") fputs(\", \", stdout)"
+	decIndent
+	line "}"
+	stmt "putchar(']')"
 		
 
 

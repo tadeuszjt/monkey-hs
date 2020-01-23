@@ -1,0 +1,6 @@
+0: TFunc [] TInt
+	Alloc (Var 1) [VInt 1,VInt 2,VInt 3] TInt
+	Alloc (Var 2) [VInt 5,VBool True] TOrd
+	Alloc (Var 3) [VInt 4,VIdent (Var 2) (TArray TOrd 2),VInt 6] TAny
+	Alloc (Var 4) [VIdent (Var 1) (TArray TInt 3),VIdent (Var 3) (TArray TAny 3)] TAny
+	Print [VSubscript (VSubscript (VSubscript (VIdent (Var 4) (TArray TAny 2)) (VInt 1)) (VInt 1)) (VInt 0)]

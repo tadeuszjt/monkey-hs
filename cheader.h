@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
+#define access(a, t) ((t*)(a).ptr)
 
 typedef enum {
 	TInt,
@@ -26,34 +27,24 @@ typedef struct {
 typedef struct {
 	void* ptr;
 	int   len;
+	Type  type;
 } Array;
 
 
 typedef struct {
-	void* ptr;
-	int   len;
-	Type  type;
-} TypedArray;
-
-
-typedef struct {
 	union {
-		Ord        asOrd;
-		TypedArray asArray;
+		Ord   asOrd;
+		Array asArray;
 	};
 	Type type;
 } Any;
 
 
-Array arr(void *ptr, int len) {
-	Array a = {ptr, len};
+Array array(void *ptr, int len, Type type) {
+	Array a = {ptr, len, type};
 	return a;
 }
 
-TypedArray tarr(void *ptr, int len, Type type) {
-	TypedArray a = {ptr, len, type};
-	return a;
-}
 
 int ordToInt(Ord ord) {
 	assert(ord.type == TInt);
@@ -94,16 +85,50 @@ Any ordToAny(Ord o) {
 	return a;
 }
 
-Any tarrToAny(TypedArray a) {
+Any arrayToAny(Array a) {
 	Any any;
 	any.asArray = a;
 	any.type = TArray;
 	return any;
 }
 
+Array anyToArray(Any a) {
+	assert(a.type == TArray);
+	return a.asArray;
+}
+
+Any accessAny(Any a, int i) {
+	assert(a.type == TArray);
+	Array array = a.asArray;
+	assert(i >= 0 && i < array.len);
+	switch (array.type) {
+	case TInt:
+		return ordToAny(intToOrd(((int*)array.ptr)[i]));
+		break;
+	case TBool:
+		return ordToAny(boolToOrd(((bool*)array.ptr)[i]));
+		break;
+	case TString:
+		return ordToAny(stringToOrd(((char**)array.ptr)[i]));
+		break;
+	case TOrd:
+		return ordToAny(((Ord*)array.ptr)[i]);
+		break;
+	case TArray:
+		return arrayToAny(((Array*)array.ptr)[i]);
+		break;
+	case TAny:
+		return ((Any*)array.ptr)[i];
+		break;
+	default:
+		assert(false);
+		break;
+	}
+}
+
 
 void printOrd(Ord ord);
-void printTypedArray(TypedArray array);
+void printArray(Array array);
 void printAny(Any any);
 
 
@@ -122,7 +147,7 @@ void printOrd(Ord ord) {
 }
 
 
-void printTypedArray(TypedArray array) {
+void printArray(Array array) {
 	putchar('[');
 	switch (array.type) {
 
@@ -154,7 +179,7 @@ void printTypedArray(TypedArray array) {
 
 	case TArray:
 		for (int i = 0; i < array.len; i++) {
-			printTypedArray(((TypedArray*)array.ptr)[i]);
+			printArray(((Array*)array.ptr)[i]);
 			if (i < array.len - 1) fputs(", ", stdout);
 		}
 		break;
@@ -179,7 +204,7 @@ void printAny(Any any) {
 		printOrd(any.asOrd);
 		break;
 	case TArray:
-		printTypedArray(any.asArray);
+		printArray(any.asArray);
 		break;
 	default:
 		assert(false);
