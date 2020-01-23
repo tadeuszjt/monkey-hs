@@ -167,7 +167,7 @@ void printArray(Array array) {
 
 	case TString:
 		for (int i = 0; i < array.len; i++)
-			printf("%s%s", ((char*)array.ptr)[i], i < array.len - 1 ? ", " : "");
+			printf("%s%s", ((char**)array.ptr)[i], i < array.len - 1 ? ", " : "");
 		break;
 
 	case TOrd:
