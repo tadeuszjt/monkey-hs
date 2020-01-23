@@ -2,5 +2,5 @@
 	Alloc (Var 1) [VInt 1,VInt 2,VInt 3] TInt
 	Alloc (Var 2) [VInt 1,VInt 2,VInt 3] TInt
 	Alloc (Var 3) [VInt 1,VInt 2,VInt 3] TInt
-	Alloc (Var 4) [VIdent (Var 1) (TArray TInt 3),VIdent (Var 2) (TArray TInt 3),VIdent (Var 3) (TArray TInt 3)] (TArray TInt 3)
-	Print [VSubscript (VIdent (Var 4) (TArray (TArray TInt 3) 3)) (VInt 1)]
+	Alloc (Var 4) [VIdent (Var 1) (TArray TInt 3),VIdent (Var 2) (TArray TInt 3),VBool True] TAny
+	Print [VIdent (Var 4) (TArray TAny 3)]

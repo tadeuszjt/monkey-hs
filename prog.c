@@ -17,14 +17,14 @@ int v0() {
 		2,
 		3,
 	};
-	Array v4[] = {
-		{v1, 3, TInt},
-		{v2, 3, TInt},
-		{v3, 3, TInt},
+	Any v4[] = {
+		arrayToAny(array(v1, 3, TInt)),
+		arrayToAny(array(v2, 3, TInt)),
+		ordToAny(boolToOrd(true)),
 	};
 	putchar('[');
 	for (int i = 0; i < 3; i++) {
-		printf("%d", access(v4[1], int)[i]);
+		printAny(v4[i]);
 		if (i < 2) fputs(", ", stdout);
 	}
 	putchar(']');

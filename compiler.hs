@@ -82,7 +82,7 @@ array (S.Array pos exps) = do
 	vals <- mapM expr exps
 	let typeSet = Set.toList $ Set.fromList (map typeOf vals)
 	elemType <- getElemType typeSet
-	
+
 	id <- fmap Var unique
 	emit $ Alloc id vals elemType
 	return $ VIdent id (TArray elemType $ length vals)
@@ -99,6 +99,7 @@ array (S.Array pos exps) = do
 		allOrd (t:ts) = allOrd [t] && allOrd ts
 
 		allArray [TArray _ _] = True
+		allArray [_]          = False
 		allArray (t:ts)       = allArray [t] && allArray ts
 
 
