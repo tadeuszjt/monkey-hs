@@ -7,19 +7,19 @@ int v0() {
 		2,
 		3,
 	};
-	int v2[] = {
-		1,
-		2,
-		3,
+	bool v2[] = {
+		true,
+		false,
 	};
 	int v3[] = {
-		1,
 		2,
 		3,
+		4,
 	};
+	memcpy(v1, v3, sizeof(v1));
 	Any v4[] = {
 		arrayToAny(array(v1, 3, TInt)),
-		arrayToAny(array(v2, 3, TInt)),
+		arrayToAny(array(v2, 2, TBool)),
 		ordToAny(boolToOrd(true)),
 	};
 	putchar('[');

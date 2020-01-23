@@ -138,12 +138,11 @@ call (S.Call pos nameExpr argExprs) = do
 
 	argVals <- mapM expr argExprs
 	return $ VCall id argVals retty
-	where
 
 
 func :: S.Expr -> Cmp Val
 func (S.Func pos args (S.Block _ stmts)) = do
-	let argTypes = replicate (length args) TOrd
+	let argTypes = map (\_ -> TAny) args
 
 	id <- createFunc argTypes
 	mapM_ (\(name, typ, ind) -> declareArg name typ ind) (zip3 args argTypes [0..])

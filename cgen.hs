@@ -93,16 +93,17 @@ toOrd :: Val -> String
 toOrd val = case typeOf val of
 	TInt    -> "intToOrd(" ++ strVal val ++ ")"
 	TBool   -> "boolToOrd(" ++ strVal val ++ ")"
-	TString -> "strToOrd(" ++ strVal val ++ ")"
+	TString -> "stringToOrd(" ++ strVal val ++ ")"
 	TOrd    -> strVal val
 	_ -> error $ "can't toOrd " ++ show val
 
 
 toOrdLit :: Val -> String
 toOrdLit val = case typeOf val of
-	TInt  -> "{" ++ strVal val ++ ", TInt}"
-	TBool -> "{" ++ strVal val ++ ", TBool}"
-	TOrd  -> strVal val
+	TInt    -> "{" ++ strVal val ++ ", TInt}"
+	TBool   -> "{" ++ strVal val ++ ", TBool}"
+	TString -> toOrd val
+	TOrd    -> strVal val
 
 
 toArrayLit :: Val -> String
@@ -141,7 +142,7 @@ strVal val = case val of
 	VBool b            -> if b then "true" else "false"
 	VString str        -> "\"" ++ str ++ "\""
 	VIdent id _        -> strId id
-	VCall id args _    -> concat [strId id, "(", commaSep (map toOrd args), ")"]
+	VCall id args _    -> concat [strId id, "(", commaSep (map toAny args), ")"]
 	VInfix _ _ _ _     -> strInfix val
 	VSubscript arr ind -> strSubscript val
 
@@ -213,7 +214,7 @@ genOpn opn = case opn of
 	Return val  -> getRetty >>= \typ -> case typ of
 		TOrd -> stmt $ "return " ++ toOrd val
 		_    -> stmt $ "return " ++ strVal val
-	Set id val  -> stmt $ strId id ++ " = " ++ strVal val
+	Set _ _     -> setStmt opn
 	Print _     -> genPrint opn
 	LoopBegin   -> line "while (true) {" >> incIndent
 	LoopBreak   -> stmt "break"
@@ -223,6 +224,12 @@ genOpn opn = case opn of
 	IfEnd       -> decIndent >> line "}"
 	Expr val    -> stmt $ strVal val
 	_ -> error $ "unhandled operation: " ++ show opn
+
+
+setStmt :: Opn -> Gen ()
+setStmt (Set id val) = stmt . concat $ case typeOf val of
+	TArray _ _ -> ["memcpy(", strId id, ", ", strVal val, ", ", "sizeof(", strId id, "))"]
+	_          -> [strId id ++ " = ", strVal val]
 
 
 alloc :: Opn -> Gen ()
