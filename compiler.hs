@@ -91,17 +91,16 @@ array (S.Array pos exps) = do
 		getElemType typeSet
 			| length typeSet == 0  = return TAny
 			| length typeSet == 1  = return (head typeSet)
-			| allSameArray typeSet = return (head typeSet) 
+			| allArray typeSet     = return (head typeSet) 
 			| allOrd typeSet       = return TOrd
 			| otherwise            = return TAny
 
 		allOrd [t]    = elem t [TInt, TBool, TString, TOrd]
 		allOrd (t:ts) = allOrd [t] && allOrd ts
 
-		allSameArray typeSet = case typeSet of
-			(TArray t1 _ :ts@(TArray t2 _:_)) -> t1 == t2 && allSameArray ts
-			[TArray _ _]                      -> True
-			_                                 -> False
+		allArray [TArray _ _] = True
+		allArray (t:ts)       = allArray [t] && allArray ts
+
 
 
 subscript :: S.Expr -> Cmp Val

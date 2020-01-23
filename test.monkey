@@ -1,12 +1,10 @@
 let a = [1, 2, 3];
-let b = ["benis", "bongis"];
-let c = [true, false];
-let d = [a, b];
-
-let e = [c, [67, 68], d];
+let b = [1, 2, 3];
+let c = [1, 2, 3];
 
 
-print([a, b, c, d, e]);
+
+print([a, b, c][1]);
 
 
 

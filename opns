@@ -1,9 +1,6 @@
 0: TFunc [] TInt
 	Alloc (Var 1) [VInt 1,VInt 2,VInt 3] TInt
-	Alloc (Var 2) [VString "benis",VString "bongis"] TString
-	Alloc (Var 3) [VBool True,VBool False] TBool
-	Alloc (Var 4) [VIdent (Var 1) (TArray TInt 3),VIdent (Var 2) (TArray TString 2)] TAny
-	Alloc (Var 5) [VInt 67,VInt 68] TInt
-	Alloc (Var 6) [VIdent (Var 3) (TArray TBool 2),VIdent (Var 5) (TArray TInt 2),VIdent (Var 4) (TArray TAny 2)] TAny
-	Alloc (Var 7) [VIdent (Var 1) (TArray TInt 3),VIdent (Var 2) (TArray TString 2),VIdent (Var 3) (TArray TBool 2),VIdent (Var 4) (TArray TAny 2),VIdent (Var 6) (TArray TAny 3)] TAny
-	Print [VIdent (Var 7) (TArray TAny 5)]
+	Alloc (Var 2) [VInt 1,VInt 2,VInt 3] TInt
+	Alloc (Var 3) [VInt 1,VInt 2,VInt 3] TInt
+	Alloc (Var 4) [VIdent (Var 1) (TArray TInt 3),VIdent (Var 2) (TArray TInt 3),VIdent (Var 3) (TArray TInt 3)] (TArray TInt 3)
+	Print [VSubscript (VIdent (Var 4) (TArray (TArray TInt 3) 3)) (VInt 1)]

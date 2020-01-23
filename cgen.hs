@@ -103,20 +103,17 @@ toOrdLit val = case typeOf val of
 	TInt  -> "{" ++ strVal val ++ ", TInt}"
 	TBool -> "{" ++ strVal val ++ ", TBool}"
 	TOrd  -> strVal val
-	_ -> error $ "can't make ord literal: " ++ show val
 
 
 toArrayLit :: Val -> String
 toArrayLit val = case typeOf val of
 	TArray t l -> "{" ++ strVal val ++ ", " ++ show l ++ ", " ++ toCType t ++ "}"
-	_          -> error $ "cannot make array literal"
 
 
 toArray :: Val -> String
 toArray val = case typeOf val of
 	TArray t l -> "array(" ++ strVal val ++ ", " ++ show l ++ ", " ++ toCType t ++ ")"
 	TAny       -> "anyToArray(" ++ strVal val ++ ")"
-	_          -> error "can't toArray"
 
 
 toCType :: Type -> String
@@ -134,7 +131,6 @@ toAny val
 	| isOrd typ   = "ordToAny(" ++ toOrd val ++ ")"
 	| isArray typ = "arrayToAny(" ++ toArray val ++ ")" 
 	| typ == TAny = strVal val
-	| otherwise   = error $ "can't toAny: " ++ show typ
 	where
 		typ = typeOf val
 
@@ -148,15 +144,14 @@ strVal val = case val of
 	VCall id args _    -> concat [strId id, "(", commaSep (map toOrd args), ")"]
 	VInfix _ _ _ _     -> strInfix val
 	VSubscript arr ind -> strSubscript val
-	_ -> error $ "strVal: " ++ show val
 
 
 
 strSubscript :: Val -> String
-strSubscript (VSubscript arr ind) = case typeOf arr of
-	TArray (TArray t _) _ -> "access(" ++ strVal arr ++ "[" ++ strVal ind ++ "], " ++ strType t ++ ")"
-	TAny                  -> "accessAny(" ++ strVal arr ++ ", " ++ strVal ind ++ ")"
-	_                     -> strVal arr ++ "[" ++ strVal ind ++ "]"
+strSubscript (VSubscript arr ind) = concat $ case typeOf arr of
+	TArray (TArray t _) _ -> ["access(", strVal arr, "[", strVal ind, "], ", strType t, ")"]
+	TAny                  -> ["accessAny(", strVal arr, ", ", strVal ind, ")"]
+	_                     -> [strVal arr, "[", strVal ind, "]"]
 
 
 strInfix :: Val -> String
@@ -282,7 +277,7 @@ printArray val = do
 		TString    -> stmt $ "fputs(" ++ elemStr ++ ", stdout)"
 		TOrd       -> stmt $ "printOrd(" ++ elemStr ++ ")"
 		TAny       -> stmt $ "printAny(" ++ elemStr ++ ")"
-		TArray t _ -> stmt $ "printArray(" ++ toArray val ++ ")"
+		TArray t _ -> stmt $ "printArray(" ++ elemStr ++ ")"
 
 	stmt $ "if (i < " ++ show (len - 1) ++ ") fputs(\", \", stdout)"
 	decIndent
