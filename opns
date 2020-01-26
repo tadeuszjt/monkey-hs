@@ -1,7 +1,0 @@
-0: TFunc [] TInt
-	Alloc (Var 1) [VInt 1,VInt 2,VInt 3] TInt
-	Alloc (Var 2) [VBool True,VBool False] TBool
-	Alloc (Var 3) [VInt 2,VInt 3,VInt 4] TInt
-	Set (Var 1) (VIdent (Var 3) (TArray TInt 3))
-	Alloc (Var 4) [VIdent (Var 1) (TArray TInt 3),VIdent (Var 2) (TArray TBool 2),VBool True] TAny
-	Print [VIdent (Var 4) (TArray TAny 3)]

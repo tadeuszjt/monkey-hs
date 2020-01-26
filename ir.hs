@@ -1,16 +1,18 @@
 module IR where
 
-import qualified AST as A
-import System.IO
+import Data.Map as Map
+
+import qualified AST as S
 
 type Index = Int
-type Prog = [(Index, Func)]
-type Func = (Type, [Opn])
+type Program = [(Index, Func)]
 
 
-data Ident
-	= Var Index
-	| Arg Index
+data Func = Func {
+	typ  :: Type,
+	args :: [Index],
+	opns :: [Opn]
+	}
 	deriving Show
 
 
@@ -19,67 +21,49 @@ data Type
 	| TBool
 	| TString
 	| TOrd
-	| TAny
-	| TVoid 
 	| TArray Type Int
 	| TFunc [Type] Type
+	| TAny
+	| TVoid 
 	deriving (Show, Eq, Ord)
 
 
 data Val
-	= VInt Int
-	| VBool Bool
-	| VString String
-	| VIdent Ident Type
-	| VInfix A.Op Val Val Type
-	| VCall Ident [Val] Type
-	| VSubscript Val Val
+	= Int Int
+	| Bool Bool
+	| String String
+	| Ident Index Type
+	| Infix S.Op Val Val Type
+	| Call Index [Val] Type
+	| Subscript Val Val
 	deriving Show
 
 	
 data Opn
-	= Assign Ident Val
-	| Alloc Ident [Val] Type
-	| Set Ident Val
+	= Assign Index Val Type
+	| Set Index Val Type
+	| Return Val Type
+	| Alloc Index [Val]
 	| Print [Val]
 	| Expr Val
-	| LoopBegin   | LoopBreak | LoopEnd
-	| IfBegin Val | IfElse    | IfEnd
-	| Return Val
+	| Loop
+	| Break
+	| If Val
+	| ElseIf Val
+	| End
 	deriving Show
 
 
-isOrd :: Type -> Bool
-isOrd t = case t of
-	TInt    -> True
-	TBool   -> True
-	TString -> True
-	TOrd    -> True
-	_       -> False
-
-
-isArray :: Type -> Bool
-isArray (TArray _ _) = True
-isArray _            = False
-
-
 typeOf :: Val -> Type
-typeOf v = case v of
-	VInt _           -> TInt
-	VBool _          -> TBool
-	VString _        -> TString
-	VIdent _ t       -> t
-	VInfix _ _ _ t   -> t
-	VCall _ _ t      -> t
-	VSubscript arr _ -> case typeOf arr of
-		TArray t _ -> t
-		TAny       -> TAny
+typeOf val = case val of
+	Int _         -> TInt
+	Bool _        -> TBool
+	String _      -> TString
+	Ident _ t     -> t
+	Infix _ _ _ t -> t
+	Call _ _ t    -> t
+	Subscript a _ -> let TArray t _ = typeOf a in t
 
 
-hPrintIR :: Handle -> Prog -> IO ()
-hPrintIR h prog                 = mapM_ (hPrintFn h) prog
-hPrintFn h (index, (typ, opns)) = do
-	hPutStrLn h $ show index ++ ": " ++ show typ
-	mapM_ (hPrintOpn h) opns
-	putStrLn ""	
-hPrintOpn h opn                 = hPutStrLn h $ "\t" ++ show opn
+isOrd :: Type -> Bool
+isOrd typ = typ `elem` [TInt, TBool, TOrd]

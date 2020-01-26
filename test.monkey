@@ -1,10 +1,11 @@
-let a = [1, 2, 3];
-let b = [true, false];
+let x = 12;
 
-a = [2, 3, 4];
+let y = false;
 
-print([a, b, true]);
+x = true;
+if x {
+}
 
-
-
-
+while x {
+	x = false;
+}

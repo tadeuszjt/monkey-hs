@@ -4,20 +4,23 @@ import qualified Lexer as L
 
 type Name = String
 type Posn = L.AlexPosn
+type AST  = [Stmt]
+
 
 data Op
-    = Times
+    = Plus
+    | Minus
+    | Times
 	| Divide
     | Mod
-    | Plus
-    | Minus
-    | LThan
-    | GThan
-    | EqEq
+    | LT
+    | GT
     | LTEq
     | GTEq
+    | EqEq
     | OrOr
     deriving (Show, Eq)
+
 
 data Expr
     = Int       Posn Int
@@ -31,18 +34,17 @@ data Expr
     | Array     Posn [Expr]
     deriving (Show, Eq)
 
+
 data Stmt
     = Assign    Posn Name   Expr
     | Set       Posn Name   Expr
+    | Return    Posn Expr
     | If        Posn Expr   Stmt (Maybe Stmt)
     | While     Posn Expr   Stmt
-	| Block     Posn [Stmt]
-	| BlockExpr Posn Expr
-    | Return    Posn Expr
+	| Block     [Stmt]
+	| BlockExpr Expr
     | ExprStmt  Expr
     deriving (Show, Eq)
-
-type Program = [Stmt]
 
 
 exprPosn :: Expr -> Posn
@@ -57,13 +59,13 @@ exprPosn exp = case exp of
 	Array p _       -> p
 	Subscript p _ _ -> p
 
+
 stmtPosn :: Stmt -> Posn
 stmtPosn stmt = case stmt of
 	Assign p _ _  -> p
 	Set p _ _     -> p
+	Return p _    -> p
 	If p _ _ _    -> p
 	While p _ _   -> p
-	Block p _     -> p
-	BlockExpr p _ -> p
-	Return p _    -> p
+	BlockExpr e   -> exprPosn e
 	ExprStmt e    -> exprPosn e

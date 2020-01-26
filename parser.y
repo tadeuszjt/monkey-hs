@@ -69,6 +69,7 @@ Prog : Stmt                    { [$1] }
 Stmt : Stmt1 ';'               { $1 }
      | while Expr Block        { S.While (L.tokPosn $1) $2 $3 }
      | If                      { $1 }
+	 | Block                   { $1 }
       
 Stmt1 : let ident '=' Expr     { let (L.Ident _ s) = $2 in S.Assign (L.tokPosn $1) s $4 }
       | ident '=' Expr         { let (L.Ident _ s) = $1 in S.Set (L.tokPosn $2) s $3 }
@@ -83,8 +84,8 @@ Else : {- empty -}             { Nothing }
      | else If                 { Just $2 }
 
 
-Block : '{' Block1 '}'         { S.Block (L.tokPosn $1) $2 } 
-	  | '{' Expr '}'           { S.BlockExpr (L.tokPosn $1) $2 }
+Block : '{' Block1 '}'         { S.Block $2 } 
+	  | '{' Expr '}'           { S.BlockExpr $2 }
 
 Block1 : {- empty -}           { [] }
        | Stmt Block1           { $1 : $2 }
@@ -106,8 +107,8 @@ Expr : int                     { let (L.Int p i) = $1 in S.Int p i }
      | Expr '*' Expr           { S.Infix (L.tokPosn $2) S.Times $1 $3 }
      | Expr '/' Expr           { S.Infix (L.tokPosn $2) S.Divide $1 $3 }
      | Expr '%' Expr           { S.Infix (L.tokPosn $2) S.Mod $1 $3 }
-     | Expr '<' Expr           { S.Infix (L.tokPosn $2) S.LThan $1 $3 }
-     | Expr '>' Expr           { S.Infix (L.tokPosn $2) S.GThan $1 $3 }
+     | Expr '<' Expr           { S.Infix (L.tokPosn $2) S.LT $1 $3 }
+     | Expr '>' Expr           { S.Infix (L.tokPosn $2) S.GT $1 $3 }
      | Expr '<=' Expr          { S.Infix (L.tokPosn $2) S.LTEq $1 $3 }
      | Expr '>=' Expr          { S.Infix (L.tokPosn $2) S.GTEq $1 $3 }
      | Expr '==' Expr          { S.Infix (L.tokPosn $2) S.EqEq $1 $3 }

@@ -7,6 +7,7 @@ import qualified Lexer as L
 import qualified Parser as P
 import qualified AST as S
 import qualified Evaluate as E
+import qualified TypeChecker as T
 import qualified Compiler as C
 import qualified IR as I
 import qualified CGen as G
@@ -18,12 +19,12 @@ main = do
     hOpns <- openFile "opns" WriteMode
     content <- hGetContents h
     let tokens = L.alexScanTokens content
-    let prog = P.parseTokens tokens
-    case C.compile prog of
+    let ast = P.parseTokens tokens
+    case T.compile ast of
         Left e  -> printError e content fname
-        Right p -> do
-            I.hPrintIR hOpns p
-            evalStateT (G.prog p) G.initGenState
+        Right ast' -> case C.compile ast' of
+			Left e -> printError e content fname
+			Right prog -> G.generate prog
     hClose h
     hClose hOpns
 	where
