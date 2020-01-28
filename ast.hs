@@ -41,6 +41,7 @@ data Stmt
     | Return    Posn Expr
     | If        Posn Expr   Stmt (Maybe Stmt)
     | While     Posn Expr   Stmt
+	| Print     Posn [Expr]
 	| Block     [Stmt]
 	| BlockExpr Expr
     | ExprStmt  Expr

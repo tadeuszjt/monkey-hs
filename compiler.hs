@@ -13,6 +13,8 @@ import IR
 type CmpError = (L.AlexPosn, String)
 
 data CmpState = CmpState {
+    idCount :: Index,
+	idMap   :: Map.Map S.Name Index,
 	typeMap :: Map.Map Index Type,
 	fnMap   :: Map.Map Index Func,
 	fnStack :: [Index]
@@ -24,14 +26,33 @@ type Cmp a = StateT CmpState (Either CmpError) a
 
 
 -- Compiler functions
+unique :: Cmp Index
+unique = do
+	count <- gets idCount
+	modify $ \s -> s { idCount = count + 1 }
+	return count
+
+
 emit :: Opn -> Cmp ()
 emit opn = do
 	id:_ <- gets fnStack
 	funcs <- gets fnMap 
 
-	let Just func = Map.lookup id funcs
+	let func = funcs Map.! id
 	let func' = func { opns = (opns func) ++ [opn] }
 	modify $ \s -> s { fnMap = Map.insert id func' funcs }
+
+
+insertType :: Index -> Type -> Cmp ()
+insertType id typ = do
+	types <- gets typeMap
+	modify $ \s -> s { typeMap = Map.insert id typ types }
+
+
+insertId :: String -> Index -> Cmp ()
+insertId sid id = do
+	idMap <- gets idMap
+	modify $ \s -> s { idMap = Map.insert sid id idMap }
 
 
 err :: L.AlexPosn -> String -> Cmp ()
@@ -46,15 +67,17 @@ getType id = do
 	
 -- Compile AST
 compile :: T.CheckedAST -> Either CmpError Program
-compile checkedAST = do
-	let types = resolveTypeMap (T.symbols checkedAST)
-	let initFuncRetType = case Map.lookup 1 types of
+compile (typeMap, ast) = do
+	let initIdCount = (head . reverse . Map.keys $ typeMap) + 1
+	let initFuncRetType = case Map.lookup 1 typeMap of
 		Just t  -> t
 		Nothing -> TVoid
 	let initFuncType = TFunc [] initFuncRetType
 
 	let initCmpState = CmpState {
-		typeMap = Map.union types (Map.fromList [(0, initFuncType), (1, initFuncRetType)]),
+		idCount = initIdCount,
+		idMap   = Map.empty,
+		typeMap = Map.union typeMap (Map.fromList [(0, initFuncType), (1, initFuncRetType)]),
 		fnMap   = Map.singleton 0 (Func initFuncType [] []),
 		fnStack = [0]
 		}
@@ -63,48 +86,25 @@ compile checkedAST = do
 	where
 		cmp :: Cmp Program
 		cmp = do
-			mapM_ stmt (T.ast checkedAST)
+			mapM_ stmt ast
 			return . Map.toList =<< gets fnMap
 
-
-resolveTypeMap :: Map.Map T.Index (Set.Set T.Type) -> Map.Map T.Index Type
-resolveTypeMap typeMap =
-	Map.fromList $ map (\(id, _) -> (id, resolveId id)) typeMapList  
-	where 
-		typeMapList = Map.toList typeMap
-
-		resolveId :: T.Index -> Type
-		resolveId id =
-			let list = case Map.lookup id typeMap of
-				Just set -> Set.toList set
-				Nothing  -> []
-			in resolveTypes list
-				
-		resolveTypes []    = TVoid
-		resolveTypes [x]   = case x of
-			T.TInt      -> TInt
-			T.TBool     -> TBool
-			T.TString   -> TString
-			T.TypeOf id -> resolveId id
-		resolveTypes types
-			| allOrd types = TOrd
-			| otherwise    = error "haven't gotten this far"
-	
-		allOrd [T.TypeOf id] = isOrd (resolveId id)
-		allOrd [x]           = isOrd (resolveTypes [x])
-		allOrd (x:xs)        = allOrd [x] && allOrd xs
 
 
 stmt :: S.Stmt -> Cmp ()
 stmt s = case s of
 	S.Assign pos sid e -> do
-		let id = read sid
 		val <- expr e
-		typ <- getType id
-		emit $ Assign id val typ
+		case val of
+			Ident id' (TArray _ _) -> insertId sid id'
+			_                      -> do
+				let id = read sid
+				insertId sid id
+				typ <- getType id
+				emit $ Assign id val typ
 
 	S.Set pos sid e -> do
-		let id = read sid
+		id <- return . (Map.! sid) =<< gets idMap
 		val <- expr e
 		typ <- getType id
 		emit $ Set id val typ
@@ -114,6 +114,10 @@ stmt s = case s of
 		id:_ <- gets fnStack
 		TFunc _ retType <- getType id
 		emit $ Return val retType
+
+	S.Print pos es -> do
+		vals <- mapM expr es
+		emit $ Print vals
 
 	S.If pos cnd blk els -> do
 		cndVal <- expr cnd
@@ -150,8 +154,17 @@ expr e = case e of
 
 	S.String _ s  -> return (String s)
 
-	S.Ident _ sid ->
-		let id = read sid
-		in return . (Ident id) =<< getType id
+	S.Ident _ sid -> do
+		Just id <- return . (Map.lookup sid) =<< gets idMap
+		return . (Ident id) =<< getType id
+
+	S.Array _ es  -> do
+		vals <- mapM expr es
+		let elemType = resolveTypes (map typeOf vals)
+		let arrayType = TArray elemType (length vals)
+		id <- unique
+		insertType id arrayType
+		emit $ Alloc id vals elemType
+		return $ Ident id arrayType
 
 

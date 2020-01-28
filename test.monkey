@@ -1,11 +1,6 @@
 let x = 12;
 
-let y = false;
+let y = [true, 1];
 
-x = true;
-if x {
-}
 
-while x {
-	x = false;
-}
+print(x, y, [4, [5], 6]);

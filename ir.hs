@@ -1,6 +1,6 @@
 module IR where
 
-import Data.Map as Map
+import qualified Data.Map as Map
 
 import qualified AST as S
 
@@ -43,7 +43,7 @@ data Opn
 	= Assign Index Val Type
 	| Set Index Val Type
 	| Return Val Type
-	| Alloc Index [Val]
+	| Alloc Index [Val] Type
 	| Print [Val]
 	| Expr Val
 	| Loop
@@ -63,6 +63,15 @@ typeOf val = case val of
 	Infix _ _ _ t -> t
 	Call _ _ t    -> t
 	Subscript a _ -> let TArray t _ = typeOf a in t
+
+
+resolveTypes :: [Type] -> Type
+resolveTypes []  = TVoid
+resolveTypes [t] = t
+resolveTypes ts
+	| foldl1 (&&) (map isOrd ts) = TOrd
+	--TODO
+	| otherwise                  = TAny
 
 
 isOrd :: Type -> Bool

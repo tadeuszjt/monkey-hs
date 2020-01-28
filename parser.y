@@ -75,6 +75,7 @@ Stmt1 : let ident '=' Expr     { let (L.Ident _ s) = $2 in S.Assign (L.tokPosn $
       | ident '=' Expr         { let (L.Ident _ s) = $1 in S.Set (L.tokPosn $2) s $3 }
       | return Expr            { S.Return (L.tokPosn $1) $2 }
       | Expr                   { S.ExprStmt $1 }
+	  | print '(' Args ')'     { S.Print (L.tokPosn $1) $3 }
 
 
 If : if Expr Block Else        { S.If (L.tokPosn $1) $2 $3 $4 }
@@ -101,7 +102,6 @@ Expr : int                     { let (L.Int p i) = $1 in S.Int p i }
      | '(' Expr ')'            { $2 }
 	 | Expr '[' Expr ']'       { S.Subscript (S.exprPosn $3) $1 $3 }
      | Expr '(' Args ')'       { S.Call  (L.tokPosn $2) $1 $3 }
-     | print '(' Args ')'      { S.Call  (L.tokPosn $2) (S.Ident (L.tokPosn $1) "print") $3 }
      | Expr '+' Expr           { S.Infix (L.tokPosn $2) S.Plus $1 $3 }
      | Expr '-' Expr           { S.Infix (L.tokPosn $2) S.Minus $1 $3 }
      | Expr '*' Expr           { S.Infix (L.tokPosn $2) S.Times $1 $3 }

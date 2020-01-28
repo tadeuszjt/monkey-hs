@@ -76,6 +76,10 @@ strCType typ = case typ of
 	TFunc _ _  -> "void*"
 
 
+strType :: Type -> String
+strType typ = show typ
+
+
 strOp :: A.Op -> String
 strOp op = case op of
 	A.Plus   -> "+"
@@ -91,6 +95,11 @@ strOp op = case op of
 	A.OrOr   -> "||"
 
 
+toArray :: Val -> String
+toArray (Ident id (TArray t len)) =
+	concat ["array(", strId id, ", ", show len, ", ", strType t, ")"]
+
+
 strVal :: Val -> String
 strVal val = case val of
 	Int n      -> show n
@@ -103,10 +112,18 @@ strValAs :: Type -> Val -> String
 strValAs typ val
 	| typ == typeOf val = strVal val
 strValAs typ val = case (typ, typeOf val) of
-	(TInt, TOrd)  -> "ordToInt(" ++ strVal val ++ ")"
-	(TBool, TOrd) -> "ordToBool(" ++ strVal val ++ ")"
-	(TOrd, TInt)  -> "intToOrd(" ++ strVal val ++ ")"
-	(TOrd, TBool) -> "boolToOrd(" ++ strVal val ++ ")"
+	(TInt, TOrd)        -> "ordToInt(" ++ strVal val ++ ")"
+	(TInt, TAny)        -> "anyToOrd(ordToInt(" ++ strVal val ++ "))"
+	(TBool, TOrd)       -> "ordToBool(" ++ strVal val ++ ")"
+	(TBool, TAny)       -> "anyToOrd(ordToBool(" ++ strVal val ++ "))"
+	(TOrd, TInt)        -> "intToOrd(" ++ strVal val ++ ")"
+	(TOrd, TBool)       -> "boolToOrd(" ++ strVal val ++ ")"
+	(TOrd, TAny)        -> "anyToOrd(" ++ strVal val ++ ")"
+	(TAny, TInt)        -> "ordToAny(intToOrd(" ++ strVal val ++ "))"
+	(TAny, TBool)       -> "ordToAny(boolToOrd(" ++ strVal val ++ "))"
+	(TAny, TOrd)        -> "ordToAny(" ++ strVal val ++ ")"
+	(TAny, TArray _ _)  -> "arrayToAny(" ++ toArray val ++ ")"
+	_                   -> error $ show (typ, val)
 
 
 prog :: Program -> Gen ()
@@ -131,9 +148,35 @@ func (id, Func (TFunc argTypes retType) argIds opns) = do
 opn :: Opn -> Gen ()
 opn o = case o of
 	Assign id val typ -> stmt [strCType typ, " ", strId id, " = ", strValAs typ val]
+	Alloc id vals typ -> alloc o
 	Set id val typ    -> stmt [strId id, " = ", strValAs typ val]
 	Return val typ    -> stmt ["return ", strValAs typ val]
-	If val            -> line ["if (", strValAs TBool val, ") {"] >> incIndent
+	If val            -> line ["if (!(", strValAs TBool val, ")) {"] >> incIndent
 	Loop              -> line ["for (;;) {"] >> incIndent
 	End               -> decIndent >> line ["}"] 
 	Break             -> stmt ["break"]
+	Print vals        -> printVals vals
+
+
+alloc :: Opn -> Gen ()
+alloc (Alloc id vals typ) = do
+	line [strCType typ, " ", strId id, "[] = {"]
+	incIndent
+	mapM_ elem vals
+	decIndent
+	stmt ["}"]
+	where
+		elem val = line [strValAs typ val, ","]
+	
+
+printVals :: [Val] -> Gen ()
+printVals vals = case vals of
+	[]     -> return ()
+	[v]    -> printVal v >> stmt ["putchar('\\n')"]
+	(v:vs) -> printVal v >> stmt ["fputs(\", \", stdout)"] >> printVals vs
+	where printVal val = case typeOf val of
+		TInt       -> stmt ["printf(\"%d\", ", strVal val, ")"]
+		TBool      -> stmt ["fputs(", strVal val, " ? \"true\" : \"false\", stdout)"]
+		TOrd       -> stmt ["printOrd(", strVal val, ")"]
+		TArray t l -> stmt ["printArray(", toArray val, ")"] 
+		_      -> error $ show val

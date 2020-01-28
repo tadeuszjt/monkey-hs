@@ -7,52 +7,56 @@ import qualified Data.Set as Set
 import qualified AST as S
 import qualified Lexer as L
 import qualified SymTab 
+import IR
 
 
-type Index       = Int
-type CheckedExpr = S.Expr
-type CheckedStmt = S.Stmt
+data Node
+	= NIndex Index
+	| NType  Type
+	| NArray (Set.Set Node)
+	deriving (Show, Eq, Ord)
 
-data Type
-	= TInt
-	| TBool
-	| TString
-	| TArray Type
-	| TFunc [Type] Type
-	| TypeOf Index
-	deriving (Show, Ord, Eq)
 
-data CheckedAST  = CheckedAST {
-	symbols :: Map.Map Index (Set.Set Type),
-	ast     :: S.AST
-	}
-	deriving (Show)
+type TypeGraph  = Map.Map Index (Set.Set Node)
 
-emptyCheckedAST = CheckedAST {
-	symbols = Map.empty,
-	ast     = []
-	}
+
+resolveTypeGraph :: TypeGraph -> Map.Map Index Type
+resolveTypeGraph graph =
+	Map.map resolve graph
+	where
+		resolve :: Set.Set Node -> Type
+		resolve set = case Set.toList set of 
+			[]           -> TVoid
+			[NType t]    -> t
+			[NIndex id]  -> resolve (graph Map.! id)
+			[NArray set] -> TArray (resolve set) 0
+			[n]          -> error (show n)
+			ns           -> resolveTypes $ map (\n -> resolve $ Set.singleton n) ns
 
 
 -- Compiler Monad
+type CheckedAST = (Map.Map Index Type, S.AST)
+
+initCheckedAST = (Map.empty, [])
+
 type CmpError = (L.AlexPosn, String)
 
 
 data CmpState
 	= CmpState {
-		idCount  :: Index,
-		symTypes :: Map.Map Index (Set.Set Type),
-		symTab   :: SymTab.SymTab S.Name Index,
-		returnId :: Index
+		idCount   :: Index,
+		typeGraph :: TypeGraph,
+		symTab    :: SymTab.SymTab S.Name Index,
+		returnId  :: Index
 		}
 	deriving Show
 
 
 initCmpState = CmpState {
-	idCount  = 2,
-	symTypes = Map.empty,
-	symTab   = SymTab.initSymTab,
-	returnId = 1
+	idCount   = 2,
+	typeGraph = Map.empty,
+	symTab    = SymTab.initSymTab,
+	returnId  = 1
 	}
 
 
@@ -87,56 +91,41 @@ unique = do
 	return count
 
 
-upgrade :: Index -> Type -> Cmp ()
-upgrade id typ = do
-	syms <- gets symTypes
-	let set' = case Map.lookup id syms of
-		Just set -> Set.insert typ set
-		Nothing  -> Set.singleton typ
-	modify $ \s -> s { symTypes = Map.insert id set' syms }
+upgrade :: Index -> Node -> Cmp ()
+upgrade id node = do
+	graph <- gets typeGraph
+	let nodeSet' = case Map.lookup id graph of
+		Just set -> Set.insert node set
+		Nothing  -> Set.singleton node
+	modify $ \s -> s { typeGraph = Map.insert id nodeSet' graph }
 
 
 look :: L.AlexPosn -> S.Name -> Cmp Index
 look pos name = do
-	st <- gets symTab
-	case SymTab.lookup name st of
+	table <- gets symTab
+	case SymTab.lookup name table of
 		Just id -> return id
 		Nothing -> err pos $ name ++ " doesn't exist"
 
 
-typeOf :: CheckedExpr -> Cmp Type
-typeOf e = case e of
-	S.Int _ _      -> return TInt
-	S.Bool _ _     -> return TBool
-	S.String _ _   -> return TString
-	S.Ident pos id -> return $ TypeOf (read id)
+nodeOf :: S.Expr -> Node
+nodeOf e = case e of
+	S.Int _ _      -> NType TInt
+	S.Bool _ _     -> NType TBool
+	S.String _ _   -> NType TString
+	S.Ident pos id -> NIndex (read id)
+	S.Array pos es -> NArray (Set.fromList $ map nodeOf es)
+
+
+satisfies :: S.Expr -> Type -> Cmp Bool
+satisfies (S.Int _ _) TInt       = return True
+satisfies (S.Bool _ _) TBool     = return True
+satisfies (S.String _ _) TString = return True
+satisfies _ _ = error "not here"
+
 
 
 -- Compile AST
-satisfies :: CheckedExpr -> Type -> Cmp Bool
-satisfies e typ = case e of
-	S.Int _ _      -> return (typ == TInt)
-	S.Bool _ _     -> return (typ == TBool)
-	S.String _ _   -> return (typ == TString)
-	S.Ident pos id -> idSatisfies pos (read id) typ
-	where
-		idSatisfies :: L.AlexPosn -> Index -> Type -> Cmp Bool
-		idSatisfies pos id typ = do
-			syms <- gets symTypes
-			let Just typeSet = Map.lookup id syms
-			bs <- mapM (flip (typeSatisfies pos) $ typ) (Set.toList typeSet)
-			return $ True `elem` bs
-
-		typeSatisfies :: L.AlexPosn -> Type -> Type -> Cmp Bool
-		typeSatisfies pos ta tb = do
-			if ta == tb
-			then return True
-			else case ta of
-				TypeOf id -> idSatisfies pos id tb
-				_         -> return False
-
-
-
 compile :: S.AST -> Either CmpError CheckedAST
 compile ast = do
 	evalStateT cmp initCmpState
@@ -144,8 +133,8 @@ compile ast = do
 		cmp :: Cmp CheckedAST
 		cmp = do
 			stmts <- mapM stmt ast
-			symbols <- gets symTypes
-			return $ CheckedAST symbols stmts
+			graph <- gets typeGraph
+			return $ (resolveTypeGraph graph, stmts)
 
 
 stmt :: S.Stmt -> Cmp S.Stmt
@@ -161,20 +150,24 @@ stmt s = case s of
 		modify $ \s -> s { symTab = st' }
 
 		e' <- expr e
-		upgrade id =<< typeOf e'
+		upgrade id (nodeOf e')
 		return $ S.Assign pos (show id) e'
 	
 	S.Set pos name e -> do
 		id <- look pos name
 		e' <- expr e
-		upgrade id =<< typeOf e'
+		upgrade id (nodeOf e')
 		return $ S.Set pos (show id) e'
 
 	S.Return pos e -> do
 		e' <- expr e
 		retId <- gets returnId
-		upgrade retId =<< typeOf e'
+		upgrade retId (nodeOf e')
 		return $ S.Return pos e'
+
+	S.Print pos es -> do
+		es' <- mapM expr es
+		return $ S.Print pos es'
 
 	S.If pos cnd blk els -> do
 		cnd' <- expr cnd
