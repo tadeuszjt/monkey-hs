@@ -1,7 +1,1 @@
-let x = 12;
-
-let y = [true, 1];
-y = x;
-
-
-print(y, [3, 4, [5]]);
+print([12, [23, 3, true], [true, false]]);

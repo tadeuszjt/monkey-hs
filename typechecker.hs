@@ -28,11 +28,11 @@ resolveTypeGraph graph =
 	where
 		resolve :: Set.Set Node -> Type
 		resolve set = case Set.toList set of 
-			[]               -> TVoid
-			[NType t]        -> t
-			[NName name]     -> resolve (graph Map.! name)
-			[NArray set len] -> TArray (resolve set) len
-			ns               -> resolveTypes $ map (resolve . Set.singleton) ns
+			[]                -> TVoid
+			[NType t]         -> t
+			[NName name]      -> resolve (graph Map.! name)
+			[NArray set' len] -> TArray (resolve set') len
+			ns                -> resolveTypes . Set.fromList $ map (resolve . Set.singleton) ns
 
 
 -- Compiler Monad

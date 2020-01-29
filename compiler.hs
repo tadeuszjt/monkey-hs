@@ -87,6 +87,22 @@ compile (typeMap, ast) = do
 
 stmt :: S.Stmt -> Cmp ()
 stmt s = case s of
+	-- pure array allocation
+	S.Assign pos un e@(S.Array _ es) -> do
+		vals <- mapM expr es
+		let elemType = resolveTypes $ Set.fromList (map typeOf vals)
+		let arrayType = TArray elemType (length vals)
+
+		typ <- getType un
+		id <- unique
+		insertUn un id
+
+		if arrayType == typ
+		then emit $ Alloc id vals elemType
+		else do
+			val <- expr e
+			emit $ Assign id val typ
+		
 	S.Assign pos un e -> do
 		val <- expr e
 		typ <- getType un
@@ -145,7 +161,7 @@ expr e = case e of
 
 	S.Array _ es  -> do
 		vals <- mapM expr es
-		let elemType = resolveTypes (map typeOf vals)
+		let elemType = resolveTypes $ Set.fromList (map typeOf vals)
 		let arrayType = TArray elemType (length vals)
 
 		id <- unique

@@ -1,1 +1,1 @@
-[(0,Func {typ = TFunc [] TVoid, args = [], opns = [Assign 0 (Int 12) TInt,Alloc 1 [Bool True,Int 1] TOrd,Assign 2 (Ident 1 (TArray TOrd 2)) TAny,Set 2 (Ident 0 TInt) TAny,Alloc 3 [Int 5] TInt,Alloc 4 [Int 3,Int 4,Ident 3 (TArray TInt 1)] TAny,Print [Ident 2 TAny,Ident 4 (TArray TAny 3)]]})]
+[(0,Func {typ = TFunc [] TVoid, args = [], opns = [Alloc 0 [Int 23,Int 3,Bool True] TOrd,Alloc 1 [Bool True,Bool False] TBool,Alloc 2 [Int 12,Ident 0 (TArray TOrd 3),Ident 1 (TArray TBool 2)] TAny,Print [Ident 2 (TArray TAny 3)]]})]

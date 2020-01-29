@@ -1,7 +1,7 @@
 module IR where
 
+import qualified Data.Set as Set
 import qualified Data.Map as Map
-
 import qualified AST as S
 
 type Index = Int
@@ -65,14 +65,20 @@ typeOf val = case val of
 	Subscript a _ -> let TArray t _ = typeOf a in t
 
 
-resolveTypes :: [Type] -> Type
-resolveTypes []  = TVoid
-resolveTypes [t] = t
-resolveTypes ts
-	| foldl1 (&&) (map isOrd ts) = TOrd
-	--TODO
-	| otherwise                  = TAny
+resolveTypes :: Set.Set Type -> Type
+resolveTypes = resolve . Set.toList 
+	where
+		resolve []  = TVoid
+		resolve [t] = t
+		resolve ts
+			| foldl1 (&&) (map isOrd ts) = TOrd
+			-- TODO
+			| otherwise                  = TAny
 
 
 isOrd :: Type -> Bool
 isOrd typ = typ `elem` [TInt, TBool, TOrd]
+
+isArray :: Type -> Bool
+isArray (TArray _ _) = True
+isArray _            = False
