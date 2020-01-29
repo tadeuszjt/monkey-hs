@@ -24,7 +24,7 @@ main = do
         Left e  -> printError e content fname
         Right ast' -> case C.compile ast' of
 			Left e -> printError e content fname
-			Right prog -> G.generate prog
+			Right prog -> hPutStrLn hOpns (show prog) >> G.generate prog
     hClose h
     hClose hOpns
 	where

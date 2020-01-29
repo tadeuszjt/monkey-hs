@@ -10,57 +10,51 @@ import qualified SymTab
 import IR
 
 
+type Unique    = S.Name
+type TypeGraph = Map.Map Unique (Set.Set Node)
+type TypeMap   = Map.Map Unique Type
+
+
 data Node
-	= NIndex Index
+	= NName  Unique
 	| NType  Type
-	| NArray (Set.Set Node)
+	| NArray (Set.Set Node) Int
 	deriving (Show, Eq, Ord)
 
 
-type TypeGraph  = Map.Map Index (Set.Set Node)
-
-
-resolveTypeGraph :: TypeGraph -> Map.Map Index Type
+resolveTypeGraph :: TypeGraph -> TypeMap
 resolveTypeGraph graph =
 	Map.map resolve graph
 	where
 		resolve :: Set.Set Node -> Type
 		resolve set = case Set.toList set of 
-			[]           -> TVoid
-			[NType t]    -> t
-			[NIndex id]  -> resolve (graph Map.! id)
-			[NArray set] -> TArray (resolve set) 0
-			[n]          -> error (show n)
-			ns           -> resolveTypes $ map (\n -> resolve $ Set.singleton n) ns
+			[]               -> TVoid
+			[NType t]        -> t
+			[NName name]     -> resolve (graph Map.! name)
+			[NArray set len] -> TArray (resolve set) len
+			ns               -> resolveTypes $ map (resolve . Set.singleton) ns
 
 
 -- Compiler Monad
-type CheckedAST = (Map.Map Index Type, S.AST)
-
-initCheckedAST = (Map.empty, [])
-
-type CmpError = (L.AlexPosn, String)
-
-
 data CmpState
 	= CmpState {
-		idCount   :: Index,
+		unCount   :: Int,
 		typeGraph :: TypeGraph,
-		symTab    :: SymTab.SymTab S.Name Index,
-		returnId  :: Index
+		symTab    :: SymTab.SymTab S.Name Unique
 		}
 	deriving Show
 
 
 initCmpState = CmpState {
-	idCount   = 2,
+	unCount   = 0,
 	typeGraph = Map.empty,
-	symTab    = SymTab.initSymTab,
-	returnId  = 1
+	symTab    = SymTab.initSymTab
 	}
 
 
-type Cmp a = StateT CmpState (Either CmpError) a
+type CheckedAST = (TypeMap, S.AST)
+type CmpError   = (L.AlexPosn, String)
+type Cmp a      = StateT CmpState (Either CmpError) a
 
 
 pushScope :: Cmp ()
@@ -84,27 +78,27 @@ assert pos b msg = if b then return () else err pos msg
 
 
 -- Compilation functions
-unique :: Cmp Index
+unique :: Cmp Unique
 unique = do
-	count <- gets idCount
-	modify $ \s -> s { idCount = count + 1 }
-	return count
+	count <- gets unCount
+	modify $ \s -> s { unCount = count + 1 }
+	return (show count)
 
 
-upgrade :: Index -> Node -> Cmp ()
-upgrade id node = do
+insertNode :: Unique -> Node -> Cmp ()
+insertNode name node = do
 	graph <- gets typeGraph
-	let nodeSet' = case Map.lookup id graph of
+	let nodeSet' = case Map.lookup name graph of
 		Just set -> Set.insert node set
 		Nothing  -> Set.singleton node
-	modify $ \s -> s { typeGraph = Map.insert id nodeSet' graph }
+	modify $ \s -> s { typeGraph = Map.insert name nodeSet' graph }
 
 
-look :: L.AlexPosn -> S.Name -> Cmp Index
+look :: L.AlexPosn -> S.Name -> Cmp Unique
 look pos name = do
 	table <- gets symTab
 	case SymTab.lookup name table of
-		Just id -> return id
+		Just un -> return un
 		Nothing -> err pos $ name ++ " doesn't exist"
 
 
@@ -113,15 +107,15 @@ nodeOf e = case e of
 	S.Int _ _      -> NType TInt
 	S.Bool _ _     -> NType TBool
 	S.String _ _   -> NType TString
-	S.Ident pos id -> NIndex (read id)
-	S.Array pos es -> NArray (Set.fromList $ map nodeOf es)
+	S.Ident pos un -> NName un
+	S.Array pos es -> NArray (Set.fromList $ map nodeOf es) (length es)
 
 
 satisfies :: S.Expr -> Type -> Cmp Bool
 satisfies (S.Int _ _) TInt       = return True
 satisfies (S.Bool _ _) TBool     = return True
 satisfies (S.String _ _) TString = return True
-satisfies _ _ = error "not here"
+satisfies _ _ = error "satisfies: not filled in"
 
 
 
@@ -134,7 +128,7 @@ compile ast = do
 		cmp = do
 			stmts <- mapM stmt ast
 			graph <- gets typeGraph
-			return $ (resolveTypeGraph graph, stmts)
+			return (resolveTypeGraph graph, stmts)
 
 
 stmt :: S.Stmt -> Cmp S.Stmt
@@ -145,25 +139,19 @@ stmt s = case s of
 			Just _  -> err pos $ name ++ " already declared"
 			Nothing -> return ()
 
-		id <- unique
-		let st' = SymTab.insert name id st
+		un <- unique
+		let st' = SymTab.insert name un st
 		modify $ \s -> s { symTab = st' }
 
 		e' <- expr e
-		upgrade id (nodeOf e')
-		return $ S.Assign pos (show id) e'
+		insertNode un (nodeOf e')
+		return $ S.Assign pos un e'
 	
 	S.Set pos name e -> do
-		id <- look pos name
+		un <- look pos name
 		e' <- expr e
-		upgrade id (nodeOf e')
-		return $ S.Set pos (show id) e'
-
-	S.Return pos e -> do
-		e' <- expr e
-		retId <- gets returnId
-		upgrade retId (nodeOf e')
-		return $ S.Return pos e'
+		insertNode un (nodeOf e')
+		return $ S.Set pos un e'
 
 	S.Print pos es -> do
 		es' <- mapM expr es
@@ -200,5 +188,5 @@ expr e = case e of
 	S.Int pos n       -> return e
 	S.Bool pos b      -> return e
 	S.String pos s    -> return e
-	S.Ident pos name  -> return . (S.Ident pos) =<< fmap show (look pos name)
+	S.Ident pos name  -> return . (S.Ident pos) =<< look pos name
 	S.Array pos elems -> return . (S.Array pos) =<< mapM expr elems

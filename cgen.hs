@@ -123,7 +123,8 @@ strValAs typ val = case (typ, typeOf val) of
 	(TAny, TBool)       -> "ordToAny(boolToOrd(" ++ strVal val ++ "))"
 	(TAny, TOrd)        -> "ordToAny(" ++ strVal val ++ ")"
 	(TAny, TArray _ _)  -> "arrayToAny(" ++ toArray val ++ ")"
-	_                   -> error $ show (typ, val)
+	(TArray _ _, TAny)  -> "anyToArray(" ++ strVal val ++ ")"
+	_                   -> error $ "invalid strValAs: " ++ show (typ, val)
 
 
 prog :: Program -> Gen ()
@@ -179,4 +180,5 @@ printVals vals = case vals of
 		TBool      -> stmt ["fputs(", strVal val, " ? \"true\" : \"false\", stdout)"]
 		TOrd       -> stmt ["printOrd(", strVal val, ")"]
 		TArray t l -> stmt ["printArray(", toArray val, ")"] 
+		TAny       -> stmt ["printAny(", strValAs TAny val, ")"]
 		_      -> error $ show val

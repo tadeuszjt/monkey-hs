@@ -10,19 +10,20 @@ import qualified Lexer as L
 import IR
 
 
-type CmpError = (L.AlexPosn, String)
-
 data CmpState = CmpState {
     idCount :: Index,
-	idMap   :: Map.Map S.Name Index,
-	typeMap :: Map.Map Index Type,
+	idMap   :: Map.Map T.Unique Index,
+	typeMap :: T.TypeMap, 
 	fnMap   :: Map.Map Index Func,
 	fnStack :: [Index]
 	}
 	deriving Show
 
 
-type Cmp a = StateT CmpState (Either CmpError) a
+
+
+type CmpError = (L.AlexPosn, String)
+type Cmp a    = StateT CmpState (Either CmpError) a
 
 
 -- Compiler functions
@@ -43,41 +44,34 @@ emit opn = do
 	modify $ \s -> s { fnMap = Map.insert id func' funcs }
 
 
-insertType :: Index -> Type -> Cmp ()
-insertType id typ = do
+insertType :: T.Unique -> Type -> Cmp ()
+insertType un typ = do
 	types <- gets typeMap
-	modify $ \s -> s { typeMap = Map.insert id typ types }
+	modify $ \s -> s { typeMap = Map.insert un typ types }
 
 
-insertId :: String -> Index -> Cmp ()
-insertId sid id = do
+insertUn :: T.Unique -> Index -> Cmp ()
+insertUn un id = do
 	idMap <- gets idMap
-	modify $ \s -> s { idMap = Map.insert sid id idMap }
+	modify $ \s -> s { idMap = Map.insert un id idMap }
 
 
 err :: L.AlexPosn -> String -> Cmp ()
 err pos str = lift $ Left (pos, str)
 
 
-getType :: Index -> Cmp Type
-getType id = do
-	Just typ <- return . (Map.lookup id) =<< gets typeMap
-	return typ 
+getType :: T.Unique -> Cmp Type
+getType un = return . (Map.! un) =<< gets typeMap
 	
 	
 -- Compile AST
 compile :: T.CheckedAST -> Either CmpError Program
 compile (typeMap, ast) = do
-	let initIdCount = (head . reverse . Map.keys $ typeMap) + 1
-	let initFuncRetType = case Map.lookup 1 typeMap of
-		Just t  -> t
-		Nothing -> TVoid
-	let initFuncType = TFunc [] initFuncRetType
-
+	let initFuncType = TFunc [] TVoid
 	let initCmpState = CmpState {
-		idCount = initIdCount,
+		idCount = 0,
 		idMap   = Map.empty,
-		typeMap = Map.union typeMap (Map.fromList [(0, initFuncType), (1, initFuncRetType)]),
+		typeMap = typeMap,
 		fnMap   = Map.singleton 0 (Func initFuncType [] []),
 		fnStack = [0]
 		}
@@ -93,27 +87,18 @@ compile (typeMap, ast) = do
 
 stmt :: S.Stmt -> Cmp ()
 stmt s = case s of
-	S.Assign pos sid e -> do
+	S.Assign pos un e -> do
 		val <- expr e
-		case val of
-			Ident id' (TArray _ _) -> insertId sid id'
-			_                      -> do
-				let id = read sid
-				insertId sid id
-				typ <- getType id
-				emit $ Assign id val typ
+		typ <- getType un
+		id <- unique
+		insertUn un id
+		emit $ Assign id val typ
 
-	S.Set pos sid e -> do
-		id <- return . (Map.! sid) =<< gets idMap
+	S.Set pos un e -> do
+		typ <- getType un
+		id <- return . (Map.! un) =<< gets idMap
 		val <- expr e
-		typ <- getType id
 		emit $ Set id val typ
-
-	S.Return pos e -> do
-		val <- expr e
-		id:_ <- gets fnStack
-		TFunc _ retType <- getType id
-		emit $ Return val retType
 
 	S.Print pos es -> do
 		vals <- mapM expr es
@@ -154,16 +139,16 @@ expr e = case e of
 
 	S.String _ s  -> return (String s)
 
-	S.Ident _ sid -> do
-		Just id <- return . (Map.lookup sid) =<< gets idMap
-		return . (Ident id) =<< getType id
+	S.Ident _ un -> do
+		id <- return . (Map.! un) =<< gets idMap
+		return . (Ident id) =<< getType un
 
 	S.Array _ es  -> do
 		vals <- mapM expr es
 		let elemType = resolveTypes (map typeOf vals)
 		let arrayType = TArray elemType (length vals)
+
 		id <- unique
-		insertType id arrayType
 		emit $ Alloc id vals elemType
 		return $ Ident id arrayType
 

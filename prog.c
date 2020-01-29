@@ -1,24 +1,24 @@
 #include "cheader.h"
 
 void v0() {
-	int v2 = 12;
-	Ord v4[] = {
+	int v0 = 12;
+	Ord v1[] = {
 		boolToOrd(true),
 		intToOrd(1),
 	};
-	int v5[] = {
+	Any v2 = arrayToAny(array(v1, 2, TOrd));
+	v2 = ordToAny(intToOrd(v0));
+	int v3[] = {
 		5,
 	};
-	Any v6[] = {
+	Any v4[] = {
+		ordToAny(intToOrd(3)),
 		ordToAny(intToOrd(4)),
-		arrayToAny(array(v5, 1, TInt)),
-		ordToAny(intToOrd(6)),
+		arrayToAny(array(v3, 1, TInt)),
 	};
-	printf("%d", v2);
+	printAny(v2);
 	fputs(", ", stdout);
-	printArray(array(v4, 2, TOrd));
-	fputs(", ", stdout);
-	printArray(array(v6, 3, TAny));
+	printArray(array(v4, 3, TAny));
 	putchar('\n');
 }
 

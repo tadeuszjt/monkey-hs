@@ -1,6 +1,7 @@
 let x = 12;
 
 let y = [true, 1];
+y = x;
 
 
-print(x, y, [4, [5], 6]);
+print(y, [3, 4, [5]]);
