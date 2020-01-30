@@ -1,21 +1,45 @@
 #include "cheader.h"
 
 void v0() {
-	Ord v0[] = {
-		intToOrd(23),
-		intToOrd(3),
-		boolToOrd(true),
+	int v0[] = {
+		1,
+		2,
+		3,
 	};
-	bool v1[] = {
-		true,
-		false,
+	Array v1 = array(v0, 3, TInt);
+	int v2[] = {
+		3,
+		4,
+		5,
 	};
-	Any v2[] = {
-		ordToAny(intToOrd(12)),
-		arrayToAny(array(v0, 3, TOrd)),
-		arrayToAny(array(v1, 2, TBool)),
+	v1 = array(v2, 3, TInt);
+	Array v3 = v1;
+	printArray(v1);
+	fputs(", ", stdout);
+	printArray(v3);
+	putchar('\n');
+	int v4[] = {
+		1,
+		2,
+		3,
 	};
-	printArray(array(v2, 3, TAny));
+	int v5[] = {
+		4,
+		5,
+		5,
+	};
+	int v6[] = {
+		6,
+		7,
+		8,
+	};
+	Array v7[] = {
+		array(v4, 3, TInt),
+		array(v5, 3, TInt),
+		array(v6, 3, TInt),
+	};
+	Array v8 = array(v7, 3, TArrayPtr);
+	printArray(v8);
 	putchar('\n');
 }
 

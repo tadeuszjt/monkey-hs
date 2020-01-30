@@ -20,8 +20,6 @@ data CmpState = CmpState {
 	deriving Show
 
 
-
-
 type CmpError = (L.AlexPosn, String)
 type Cmp a    = StateT CmpState (Either CmpError) a
 
@@ -84,36 +82,27 @@ compile (typeMap, ast) = do
 			return . Map.toList =<< gets fnMap
 
 
-
 stmt :: S.Stmt -> Cmp ()
 stmt s = case s of
-	-- pure array allocation
-	S.Assign pos un e@(S.Array _ es) -> do
-		vals <- mapM expr es
-		let elemType = resolveTypes $ Set.fromList (map typeOf vals)
-		let arrayType = TArray elemType (length vals)
-
-		typ <- getType un
-		id <- unique
-		insertUn un id
-
-		if arrayType == typ
-		then emit $ Alloc id vals elemType
-		else do
-			val <- expr e
-			emit $ Assign id val typ
-		
 	S.Assign pos un e -> do
 		val <- expr e
 		typ <- getType un
+		case typ of
+			TArray _ _ -> insertType un TArrayPtr
+			_          -> return ()
+
 		id <- unique
 		insertUn un id
-		emit $ Assign id val typ
+		emit =<< return . (Assign id val) =<< getType un
 
 	S.Set pos un e -> do
-		typ <- getType un
-		id <- return . (Map.! un) =<< gets idMap
 		val <- expr e
+		typ <- getType un
+		case typ of
+			TArray _ _ -> insertType un TArrayPtr
+			_          -> return ()
+
+		id <- return . (Map.! un) =<< gets idMap
 		emit $ Set id val typ
 
 	S.Print pos es -> do
@@ -162,10 +151,12 @@ expr e = case e of
 	S.Array _ es  -> do
 		vals <- mapM expr es
 		let elemType = resolveTypes $ Set.fromList (map typeOf vals)
-		let arrayType = TArray elemType (length vals)
+		let arrayType@(TArray elemType' len) = case elemType of
+			TArray _ _ -> TArray TArrayPtr (length vals)
+			_          -> TArray elemType (length vals)
 
 		id <- unique
-		emit $ Alloc id vals elemType
+		emit $ Alloc id vals elemType'
 		return $ Ident id arrayType
 
 

@@ -10,7 +10,7 @@ typedef enum {
 	TBool,
 	TString,
 	TOrd,
-	TArray,
+	TArrayPtr,
 	TAny,
 } Type;
 
@@ -89,17 +89,17 @@ Any ordToAny(Ord o) {
 Any arrayToAny(Array a) {
 	Any any;
 	any.asArray = a;
-	any.type = TArray;
+	any.type = TArrayPtr;
 	return any;
 }
 
 Array anyToArray(Any a) {
-	assert(a.type == TArray);
+	assert(a.type == TArrayPtr);
 	return a.asArray;
 }
 
 Any accessAny(Any a, int i) {
-	assert(a.type == TArray);
+	assert(a.type == TArrayPtr);
 	Array array = a.asArray;
 	assert(i >= 0 && i < array.len);
 	switch (array.type) {
@@ -115,7 +115,7 @@ Any accessAny(Any a, int i) {
 	case TOrd:
 		return ordToAny(((Ord*)array.ptr)[i]);
 		break;
-	case TArray:
+	case TArrayPtr:
 		return arrayToAny(((Array*)array.ptr)[i]);
 		break;
 	case TAny:
@@ -178,7 +178,7 @@ void printArray(Array array) {
 		}
 		break;
 
-	case TArray:
+	case TArrayPtr:
 		for (int i = 0; i < array.len; i++) {
 			printArray(((Array*)array.ptr)[i]);
 			if (i < array.len - 1) fputs(", ", stdout);
@@ -204,7 +204,7 @@ void printAny(Any any) {
 	case TOrd:
 		printOrd(any.asOrd);
 		break;
-	case TArray:
+	case TArrayPtr:
 		printArray(any.asArray);
 		break;
 	default:

@@ -32,7 +32,7 @@ resolveTypeGraph graph =
 			[NType t]         -> t
 			[NName name]      -> resolve (graph Map.! name)
 			[NArray set' len] -> TArray (resolve set') len
-			ns                -> resolveTypes . Set.fromList $ map (resolve . Set.singleton) ns
+			_                 -> resolveTypes $ Set.map (resolve . Set.singleton) set
 
 
 -- Compiler Monad

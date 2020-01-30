@@ -72,8 +72,9 @@ strCType typ = case typ of
 	TString    -> "char*"
 	TOrd       -> "Ord"
 	TAny       -> "Any"
-	TArray _ _ -> "Array"
+	TArrayPtr  -> "Array"
 	TFunc _ _  -> "void*"
+	_          -> error $ "can't strCType: " ++ show typ
 
 
 strType :: Type -> String
@@ -112,19 +113,21 @@ strValAs :: Type -> Val -> String
 strValAs typ val
 	| typ == typeOf val = strVal val
 strValAs typ val = case (typ, typeOf val) of
-	(TInt, TOrd)        -> "ordToInt(" ++ strVal val ++ ")"
-	(TInt, TAny)        -> "anyToOrd(ordToInt(" ++ strVal val ++ "))"
-	(TBool, TOrd)       -> "ordToBool(" ++ strVal val ++ ")"
-	(TBool, TAny)       -> "anyToOrd(ordToBool(" ++ strVal val ++ "))"
-	(TOrd, TInt)        -> "intToOrd(" ++ strVal val ++ ")"
-	(TOrd, TBool)       -> "boolToOrd(" ++ strVal val ++ ")"
-	(TOrd, TAny)        -> "anyToOrd(" ++ strVal val ++ ")"
-	(TAny, TInt)        -> "ordToAny(intToOrd(" ++ strVal val ++ "))"
-	(TAny, TBool)       -> "ordToAny(boolToOrd(" ++ strVal val ++ "))"
-	(TAny, TOrd)        -> "ordToAny(" ++ strVal val ++ ")"
-	(TAny, TArray _ _)  -> "arrayToAny(" ++ toArray val ++ ")"
-	(TArray _ _, TAny)  -> "anyToArray(" ++ strVal val ++ ")"
-	_                   -> error $ "invalid strValAs: " ++ show (typ, val)
+	(TInt, TOrd)            -> "ordToInt(" ++ strVal val ++ ")"
+	(TInt, TAny)            -> "anyToOrd(ordToInt(" ++ strVal val ++ "))"
+	(TBool, TOrd)           -> "ordToBool(" ++ strVal val ++ ")"
+	(TBool, TAny)           -> "anyToOrd(ordToBool(" ++ strVal val ++ "))"
+	(TOrd, TInt)            -> "intToOrd(" ++ strVal val ++ ")"
+	(TOrd, TBool)           -> "boolToOrd(" ++ strVal val ++ ")"
+	(TOrd, TAny)            -> "anyToOrd(" ++ strVal val ++ ")"
+	(TAny, TInt)            -> "ordToAny(intToOrd(" ++ strVal val ++ "))"
+	(TAny, TBool)           -> "ordToAny(boolToOrd(" ++ strVal val ++ "))"
+	(TAny, TOrd)            -> "ordToAny(" ++ strVal val ++ ")"
+	(TAny, TArray _ _)      -> "arrayToAny(" ++ toArray val ++ ")"
+	(TAny, TArrayPtr)       -> "arrayToAny(" ++ strVal val ++ ")"
+	(TArrayPtr, TArray _ _) -> toArray val 
+	(TArrayPtr, TAny)       -> "anyToArray(" ++ strVal val ++ ")"
+	_                       -> error $ "invalid strValAs: " ++ show (typ, val)
 
 
 prog :: Program -> Gen ()
@@ -147,9 +150,9 @@ func (id, Func (TFunc argTypes retType) argIds opns) = do
 
 
 opn :: Opn -> Gen ()
-opn o = case o of
+opn op = case op of
 	Assign id val typ -> stmt [strCType typ, " ", strId id, " = ", strValAs typ val]
-	Alloc id vals typ -> alloc o
+	Alloc id vals typ -> alloc op
 	Set id val typ    -> stmt [strId id, " = ", strValAs typ val]
 	Return val typ    -> stmt ["return ", strValAs typ val]
 	If val            -> line ["if (!(", strValAs TBool val, ")) {"] >> incIndent
@@ -180,5 +183,6 @@ printVals vals = case vals of
 		TBool      -> stmt ["fputs(", strVal val, " ? \"true\" : \"false\", stdout)"]
 		TOrd       -> stmt ["printOrd(", strVal val, ")"]
 		TArray t l -> stmt ["printArray(", toArray val, ")"] 
-		TAny       -> stmt ["printAny(", strValAs TAny val, ")"]
+		TArrayPtr  -> stmt ["printArray(", strVal val, ")"]
+		TAny       -> stmt ["printAny(", strVal val, ")"]
 		_      -> error $ show val

@@ -22,6 +22,7 @@ data Type
 	| TString
 	| TOrd
 	| TArray Type Int
+	| TArrayPtr
 	| TFunc [Type] Type
 	| TAny
 	| TVoid 
@@ -62,7 +63,6 @@ typeOf val = case val of
 	Ident _ t     -> t
 	Infix _ _ _ t -> t
 	Call _ _ t    -> t
-	Subscript a _ -> let TArray t _ = typeOf a in t
 
 
 resolveTypes :: Set.Set Type -> Type
@@ -71,9 +71,9 @@ resolveTypes = resolve . Set.toList
 		resolve []  = TVoid
 		resolve [t] = t
 		resolve ts
-			| foldl1 (&&) (map isOrd ts) = TOrd
-			-- TODO
-			| otherwise                  = TAny
+			| foldl1 (&&) (map isOrd ts)   = TOrd
+			| foldl1 (&&) (map isArray ts) = TArrayPtr
+			| otherwise                    = TAny
 
 
 isOrd :: Type -> Bool
