@@ -105,9 +105,8 @@ stmt s = case s of
 		id <- return . (Map.! un) =<< gets idMap
 		emit $ Set id val typ
 
-	S.Print pos es -> do
-		vals <- mapM expr es
-		emit $ Print vals
+	S.Print pos es ->
+		emit . Print =<< mapM expr es
 
 	S.If pos cnd blk els -> do
 		cndVal <- expr cnd
@@ -128,12 +127,11 @@ stmt s = case s of
 		stmt blk
 		emit End
 
-	S.Block blk -> do
+	S.Block blk ->
 		mapM_ stmt blk
 
-	S.ExprStmt e -> do
-		val <- expr e
-		emit $ Expr val
+	S.ExprStmt e ->
+		emit . Expr =<< expr e
 
 
 expr :: S.Expr -> Cmp Val
@@ -148,15 +146,15 @@ expr e = case e of
 		id <- return . (Map.! un) =<< gets idMap
 		return . (Ident id) =<< getType un
 
-	S.Array _ es  -> do
+	S.Array _ es -> do
 		vals <- mapM expr es
-		let elemType = resolveTypes $ Set.fromList (map typeOf vals)
-		let arrayType@(TArray elemType' len) = case elemType of
-			TArray _ _ -> TArray TArrayPtr (length vals)
-			_          -> TArray elemType (length vals)
+		let elemType = case resolveTypes $ Set.fromList (map typeOf vals) of
+			TArray _ _ -> TArrayPtr
+			t          -> t
 
+		let arrayType = TArray elemType (length vals)
 		id <- unique
-		emit $ Alloc id vals elemType'
+		emit $ Alloc id vals elemType
 		return $ Ident id arrayType
 
 

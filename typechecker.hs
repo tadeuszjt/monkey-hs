@@ -153,9 +153,8 @@ stmt s = case s of
 		insertNode un (nodeOf e')
 		return $ S.Set pos un e'
 
-	S.Print pos es -> do
-		es' <- mapM expr es
-		return $ S.Print pos es'
+	S.Print pos es ->
+		return . (S.Print pos) =<< mapM expr es
 
 	S.If pos cnd blk els -> do
 		cnd' <- expr cnd

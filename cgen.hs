@@ -9,10 +9,9 @@ import IR
 
 
 -- Generator Monad
-data GenState
-	= GenState {
-		indent  :: Int,
-		retty   :: Type
+data GenState = GenState {
+	indent  :: Int,
+	retty   :: Type
 	}
 
 initGenState = GenState {
@@ -141,7 +140,7 @@ prog p = do
 func :: (Index, Func) -> Gen ()
 func (id, Func (TFunc argTypes retType) argIds opns) = do
 	let argStrs = zipWith (\t i -> strCType t ++ " " ++ strId i) argTypes argIds
-	line [""]
+	line []
 	line [strCType retType, " ", strId id, "(", commaSep argStrs, ") {"]
 	incIndent
 	mapM_ opn opns
@@ -166,11 +165,9 @@ alloc :: Opn -> Gen ()
 alloc (Alloc id vals typ) = do
 	line [strCType typ, " ", strId id, "[] = {"]
 	incIndent
-	mapM_ elem vals
+	mapM_ (\val -> line [strValAs typ val, ", "]) vals
 	decIndent
 	stmt ["}"]
-	where
-		elem val = line [strValAs typ val, ","]
 	
 
 printVals :: [Val] -> Gen ()
@@ -182,7 +179,7 @@ printVals vals = case vals of
 		TInt       -> stmt ["printf(\"%d\", ", strVal val, ")"]
 		TBool      -> stmt ["fputs(", strVal val, " ? \"true\" : \"false\", stdout)"]
 		TOrd       -> stmt ["printOrd(", strVal val, ")"]
-		TArray t l -> stmt ["printArray(", toArray val, ")"] 
+		TArray _ _ -> stmt ["printArray(", toArray val, ")"] 
 		TArrayPtr  -> stmt ["printArray(", strVal val, ")"]
 		TAny       -> stmt ["printAny(", strVal val, ")"]
-		_      -> error $ show val
+		_          -> error $ show val

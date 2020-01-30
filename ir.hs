@@ -71,9 +71,9 @@ resolveTypes = resolve . Set.toList
 		resolve []  = TVoid
 		resolve [t] = t
 		resolve ts
-			| foldl1 (&&) (map isOrd ts)   = TOrd
-			| foldl1 (&&) (map isArray ts) = TArrayPtr
-			| otherwise                    = TAny
+			| all isOrd ts   = TOrd
+			| all isArray ts = TArrayPtr
+			| otherwise      = TAny
 
 
 isOrd :: Type -> Bool

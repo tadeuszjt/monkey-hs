@@ -21,9 +21,9 @@ main = do
     let tokens = L.alexScanTokens content
     let ast = P.parseTokens tokens
     case T.compile ast of
-        Left e  -> printError e content fname
+        Left e     -> printError e content fname
         Right ast' -> case C.compile ast' of
-			Left e -> printError e content fname
+			Left e     -> printError e content fname
 			Right prog -> hPutStrLn hOpns (show prog) >> G.generate prog
     hClose h
     hClose hOpns
