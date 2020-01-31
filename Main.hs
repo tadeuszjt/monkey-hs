@@ -6,7 +6,6 @@ import System.Environment
 import qualified Lexer as L
 import qualified Parser as P
 import qualified AST as S
-import qualified Evaluate as E
 import qualified TypeChecker as T
 import qualified Compiler as C
 import qualified IR as I

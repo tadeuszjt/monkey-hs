@@ -1,4 +1,4 @@
-main: Parser.hs Lexer.hs IR.hs AST.hs Typechecker.hs Evaluate.hs Main.hs CGen.hs Cmplib.hs SymTab.hs Compiler.hs test.monkey 
+main: Parser.hs Lexer.hs IR.hs AST.hs Typechecker.hs Main.hs CGen.hs SymTab.hs Compiler.hs test.monkey 
 	ghc *.hs -outputdir build
 
 parser.hs: parser.y
