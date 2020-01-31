@@ -8,6 +8,7 @@
 typedef enum {
 	TInt,
 	TBool,
+	TChar,
 	TString,
 	TOrd,
 	TArrayPtr,
@@ -19,7 +20,7 @@ typedef struct {
 	union {
 		int asInt;
 		bool asBool;
-		char* asString;
+		char asChar;
 	};
 	Type type;
 } Ord;
@@ -46,7 +47,6 @@ Array array(void *ptr, int len, Type type) {
 	return a;
 }
 
-
 int ordToInt(Ord ord) {
 	assert(ord.type == TInt);
 	return ord.asInt;
@@ -57,9 +57,9 @@ bool ordToBool(Ord ord) {
 	return ord.asBool;
 }
 
-char* ordToString(Ord ord) {
-	assert(ord.type == TString);
-	return ord.asString;
+char ordToChar(Ord ord) {
+	assert(ord.type == TChar);
+	return ord.asChar;
 }
 
 Ord intToOrd(int i) {
@@ -72,10 +72,10 @@ Ord boolToOrd(bool b) {
 	return o;
 }
 
-Ord stringToOrd(char *s) {
+Ord charToOrd(char c) {
 	Ord o;
-	o.asString = s;
-	o.type = TString;
+	o.asChar = c;
+	o.type = TChar;
 	return o;
 }
 
@@ -91,6 +91,11 @@ Any arrayToAny(Array a) {
 	any.asArray = a;
 	any.type = TArrayPtr;
 	return any;
+}
+
+Ord anyToOrd(Any a) {
+	assert(a.type == TOrd);
+	return a.asOrd;
 }
 
 Array anyToArray(Any a) {
@@ -109,8 +114,8 @@ Any accessAny(Any a, int i) {
 	case TBool:
 		return ordToAny(boolToOrd(((bool*)array.ptr)[i]));
 		break;
-	case TString:
-		return ordToAny(stringToOrd(((char**)array.ptr)[i]));
+	case TChar:
+		return ordToAny(charToOrd(((char*)array.ptr)[i]));
 		break;
 	case TOrd:
 		return ordToAny(((Ord*)array.ptr)[i]);
@@ -141,14 +146,20 @@ void printOrd(Ord ord) {
 	case TBool:
 		fputs(ord.asBool ? "true" : "false", stdout);
 		break;
-	case TString:
-		fputs(ord.asString, stdout);
+	case TChar:
+		putc(ord.asChar, stdout);
 		break;
 	}
 }
 
 
 void printArray(Array array) {
+	if (array.type == TChar) {
+		for (int i = 0; i < array.len; i++)
+			putc(((char*)array.ptr)[i], stdout);
+		return;
+	}
+
 	putchar('[');
 	switch (array.type) {
 
@@ -164,11 +175,6 @@ void printArray(Array array) {
 				((bool*)array.ptr)[i] ? "true" : "false",
 				i < array.len - 1 ? ", " : ""
 			);
-		break;
-
-	case TString:
-		for (int i = 0; i < array.len; i++)
-			printf("%s%s", ((char**)array.ptr)[i], i < array.len - 1 ? ", " : "");
 		break;
 
 	case TOrd:
