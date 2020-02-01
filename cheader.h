@@ -3,18 +3,14 @@
 #include <assert.h>
 #include <string.h>
 
-#define access(a, t) ((t*)(a).ptr)
-
 typedef enum {
 	TInt,
 	TBool,
 	TChar,
-	TString,
 	TOrd,
 	TArrayPtr,
 	TAny,
 } Type;
-
 
 typedef struct {
 	union {
@@ -25,13 +21,11 @@ typedef struct {
 	Type type;
 } Ord;
 
-
 typedef struct {
 	void* ptr;
 	int   len;
 	Type  type;
 } Array;
-
 
 typedef struct {
 	union {
@@ -40,7 +34,6 @@ typedef struct {
 	};
 	Type type;
 } Any;
-
 
 Array array(void *ptr, int len, Type type) {
 	Array a = {ptr, len, type};
@@ -132,11 +125,9 @@ Any accessAny(Any a, int i) {
 	}
 }
 
-
 void printOrd(Ord ord);
 void printArray(Array array);
 void printAny(Any any);
-
 
 void printOrd(Ord ord) {
 	switch (ord.type) {
@@ -149,9 +140,10 @@ void printOrd(Ord ord) {
 	case TChar:
 		putc(ord.asChar, stdout);
 		break;
+	default:
+		assert(false);
 	}
 }
-
 
 void printArray(Array array) {
 	if (array.type == TChar) {
@@ -203,7 +195,6 @@ void printArray(Array array) {
 	}
 	putchar(']');
 }
-
 
 void printAny(Any any) {
 	switch (any.type) {

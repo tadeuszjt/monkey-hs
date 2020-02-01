@@ -10,8 +10,8 @@ import IR
 
 -- Generator Monad
 data GenState = GenState {
-	indent  :: Int,
-	retty   :: Type
+	indent   :: Int,
+	retty    :: Type
 	}
 
 initGenState = GenState {
@@ -155,10 +155,9 @@ opn op = case op of
 	Alloc id vals typ -> alloc op
 	Set id val typ    -> stmt [strId id, " = ", strValAs typ val]
 	Return val typ    -> stmt ["return ", strValAs typ val]
-	If val            -> line ["if (!(", strValAs TBool val, ")) {"] >> incIndent
-	Loop              -> line ["for (;;) {"] >> incIndent
-	End               -> decIndent >> line ["}"] 
-	Break             -> stmt ["break"]
+	If label val      -> stmt ["if (", strValAs TBool val, ") goto label", show label]
+	Goto label        -> stmt ["goto label", show label]
+	Label label       -> stmt ["label", show label, ":"]
 	Print vals        -> printVals vals
 
 

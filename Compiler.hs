@@ -103,21 +103,26 @@ stmt s = case s of
 		emit . Print =<< mapM expr es
 
 	S.If pos cnd blk els -> do
-		emit . If =<< expr cnd
+		end <- unique
+		emit . (If end) =<< expr cnd
 		stmt blk
 		case els of
 			Nothing            -> return ()
 			Just b@(S.Block _) -> emit (ElseIf $ Bool True) >> stmt b
 			_                  -> err pos "tadeusz can't do else if"
-		emit End
+		emit $ Label end
 
 	S.While pos cnd blk -> do
-		emit Loop
-		emit . If =<< expr cnd
-		emit Break
-		emit End
+		loop <- unique
+		end <- unique
+		endif <- unique
+		emit $ Label loop
+		emit . (If endif) =<< expr cnd
+		emit $ Goto end
+		emit $ Label endif
 		stmt blk
-		emit End
+		emit $ Goto loop
+		emit $ Label end
 
 	S.Block blk ->
 		mapM_ stmt blk

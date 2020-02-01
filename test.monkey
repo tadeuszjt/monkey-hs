@@ -1,10 +1,11 @@
 let x = 0;
 
-while (x < 10) {
-	print(x);
-	print("benis");
+let y = true;
 
+while (x < 10) {
 	x = x + 1;
+	y = [x, x];
+
+	print(x, y);
 }
 
-x = true;

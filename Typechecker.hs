@@ -118,6 +118,7 @@ nodeOf :: S.Expr -> Node
 nodeOf e = case e of
 	S.Int _ _          -> NType TInt
 	S.Bool _ _         -> NType TBool
+	S.String _ s       -> NArray (Set.singleton $ NType TChar) (length s)
 	S.Ident _ un       -> NName un
 	S.Array _ es       -> NArray (Set.fromList $ map nodeOf es) (length es)
 	S.Infix _ op e1 e2 -> NInfix op (nodeOf e1) (nodeOf e2) 
@@ -208,6 +209,16 @@ expr e = case e of
 	S.Ident pos un   -> fmap (S.Ident pos) (look pos un)
 	S.Array pos es   -> fmap (S.Array pos) (mapM expr es)
 	S.Infix _ _ _ _  -> exprInfix e
+
+
+infixTable = [
+	(S.Plus, [(TInt, TInt)]),
+	(S.Minus, [(TInt, TInt)]),
+	(S.Times, [(TInt, TInt)]),
+	(S.Divide, [(TInt, TInt)])
+	]
+
+
 
 
 exprInfix :: S.Expr -> Cmp S.Expr

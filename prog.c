@@ -1,25 +1,24 @@
 #include "cheader.h"
 
 void v0() {
-	Ord v0 = intToOrd(0);
-	for (;;) {
-		if (!(ordToInt(v0) < 10)) {
-			break;
-		}
-		printOrd(v0);
-		putchar('\n');
-		char v1[] = {
-			'b', 
-			'e', 
-			'n', 
-			'i', 
-			's', 
-		};
-		printArray(array(v1, 5, TChar));
-		putchar('\n');
-		v0 = intToOrd(ordToInt(v0) + 1);
-	}
-	v0 = boolToOrd(true);
+	int v0 = 0;
+	Any v1 = ordToAny(boolToOrd(true));
+	label2:;
+	if (v0 < 10) goto label4;
+	goto label3;
+	label4:;
+	v0 = v0 + 1;
+	int v5[] = {
+		v0, 
+		v0, 
+	};
+	v1 = arrayToAny(array(v5, 2, TInt));
+	printf("%d", v0);
+	fputs(", ", stdout);
+	printAny(v1);
+	putchar('\n');
+	goto label2;
+	label3:;
 }
 
 int main() { v0(); return 0; }

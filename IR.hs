@@ -5,6 +5,7 @@ import qualified Data.Map as Map
 import qualified AST as S
 
 type Index = Int
+type Label = Int
 type Program = [(Index, Func)]
 
 
@@ -47,11 +48,10 @@ data Opn
 	| Alloc Index [Val] Type
 	| Print [Val]
 	| Expr Val
-	| Loop
-	| Break
-	| If Val
+	| Label Label
+	| Goto Label
+	| If Label Val
 	| ElseIf Val
-	| End
 	deriving Show
 
 
